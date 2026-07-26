@@ -3,11 +3,38 @@
 
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
-generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
-}
 
 datasource db {
   provider = "postgresql"
+  
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  name         String?
+  apiKeys      ApiKey[]      // API Key yang dibuat user untuk memakai SaaS kita
+  providerKeys ProviderKey[] // API Key AI (Gemini/Groq) yang disumbangkan user ke sistem
+  createdAt    DateTime      @default(now())
+}
+
+model ApiKey {
+  id        String     @id @default(uuid())
+  key       String     @unique 
+  userId    String
+  user      User       @relation(fields: [userId], references: [id])
+  isActive  Boolean    @default(true)
+}
+
+// TABEL BARU: Tempat menyimpan koleksi API Key dari berbagai AI
+model ProviderKey {
+  id           String   @id @default(uuid())
+  providerName String   // Contoh: "Groq" atau "Gemini"
+  key          String   @unique
+  userId       String?  // Null jika ditambahkan oleh Admin, terisi jika donasi dari User
+  user         User?    @relation(fields: [userId], references: [id])
+  isActive     Boolean  @default(true)
+  priority     Int      @default(0) // Semakin tinggi angkanya, semakin awal dieksekusi
+  errorCount   Int      @default(0) // Mencatat berapa kali key ini gagal (limit)
+  createdAt    DateTime @default(now())
 }
