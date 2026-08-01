@@ -17,9 +17,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { AuthFormState } from "@/lib/auth/actions";
+import type { Dictionary } from "@/lib/i18n";
 
 interface AuthFormProps {
   mode: "login" | "register";
+  t: Dictionary["auth"];
   action: (
     state: AuthFormState,
     formData: FormData,
@@ -27,7 +29,7 @@ interface AuthFormProps {
   footer: ReactNode;
 }
 
-export function AuthForm({ mode, action, footer }: AuthFormProps) {
+export function AuthForm({ mode, action, footer, t }: AuthFormProps) {
   const [state, formAction] = useActionState<AuthFormState, FormData>(action, {});
   const isRegister = mode === "register";
 
@@ -35,12 +37,12 @@ export function AuthForm({ mode, action, footer }: AuthFormProps) {
     <Card>
       <CardHeader>
         <CardTitle className="text-xl">
-          {isRegister ? "Buat akun" : "Masuk"}
+          {isRegister ? t.registerTitle : t.loginTitle}
         </CardTitle>
         <CardDescription>
           {isRegister
-            ? "Daftar untuk mengelola API key dan provider Anda."
-            : "Masuk untuk membuka dashboard FreeAll AI."}
+            ? t.registerSubtitle
+            : t.loginSubtitle}
         </CardDescription>
       </CardHeader>
 
@@ -48,18 +50,18 @@ export function AuthForm({ mode, action, footer }: AuthFormProps) {
         <form action={formAction} className="space-y-4">
           {isRegister && (
             <div className="space-y-2">
-              <Label htmlFor="name">Nama</Label>
+              <Label htmlFor="name">{t.name}</Label>
               <Input
                 id="name"
                 name="name"
                 autoComplete="name"
-                placeholder="Nama Anda (opsional)"
+                placeholder={t.namePlaceholder}
               />
             </div>
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{t.email}</Label>
             <Input
               id="email"
               name="email"
@@ -71,7 +73,7 @@ export function AuthForm({ mode, action, footer }: AuthFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Kata sandi</Label>
+            <Label htmlFor="password">{t.password}</Label>
             <Input
               id="password"
               name="password"
@@ -79,7 +81,7 @@ export function AuthForm({ mode, action, footer }: AuthFormProps) {
               required
               minLength={isRegister ? 8 : undefined}
               autoComplete={isRegister ? "new-password" : "current-password"}
-              placeholder={isRegister ? "Minimal 8 karakter" : "••••••••"}
+              placeholder={isRegister ? t.passwordHint : "••••••••"}
             />
           </div>
 
@@ -90,7 +92,7 @@ export function AuthForm({ mode, action, footer }: AuthFormProps) {
             </Alert>
           )}
 
-          <SubmitButton label={isRegister ? "Daftar" : "Masuk"} />
+          <SubmitButton label={isRegister ? t.registerTitle : t.loginTitle} />
         </form>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">

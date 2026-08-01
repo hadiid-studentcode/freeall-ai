@@ -13,53 +13,21 @@ import {
 } from "lucide-react";
 
 import { DemoChat } from "@/components/chat/demo-chat";
+import { LanguageSwitcher } from "@/components/language-switcher";
+import { SiteFooter } from "@/components/site-footer";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getProviderCatalog } from "@/lib/ai/catalog";
 import { getCurrentUser } from "@/lib/auth/session";
+import { getTranslations } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
 import { formatNumber } from "@/lib/utils";
 
-const STEPS = [
-  {
-    icon: ClipboardPaste,
-    title: "Tempel API key",
-    body: "Ambil kunci gratis dari Groq, Gemini, atau penyedia lain, lalu tempel apa adanya. Tidak perlu tahu Base URL maupun nama model.",
-  },
-  {
-    icon: Sparkles,
-    title: "Sistem yang menata",
-    body: "Penyedia dikenali dari bentuk kuncinya, model yang masih hidup ditanyakan langsung ke sumbernya, lalu diuji sekali sebelum disimpan.",
-  },
-  {
-    icon: Send,
-    title: "Panggil satu endpoint",
-    body: "Aplikasi Anda cukup memanggil /api/v1/chat. Urusan limit, model mati, dan pergantian penyedia ditangani gateway.",
-  },
-];
-
-const FALLBACK_LAYERS = [
-  {
-    icon: Repeat,
-    title: "Model kena limit",
-    body: "Kuota gratis dihitung per model. Saat model utama membalas 429, gateway langsung mencoba model lain pada kunci yang sama.",
-    accent: "Lapis 1",
-  },
-  {
-    icon: KeyRound,
-    title: "Kunci habis",
-    body: "Kalau semua model di kunci itu ikut habis, giliran kunci berikutnya sesuai prioritas — bisa penyedia yang sama atau berbeda.",
-    accent: "Lapis 2",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Kunci ditolak",
-    body: "Kunci yang dibalas 401 atau 403 dinonaktifkan otomatis beserta alasannya, jadi tidak memperlambat request berikutnya.",
-    accent: "Lapis 3",
-  },
-];
+// Ikon tetap di kode; judul dan isinya diambil dari kamus bahasa.
+const STEP_ICONS = [ClipboardPaste, Sparkles, Send];
+const LAYER_ICONS = [Repeat, KeyRound, ShieldCheck];
 
 const CURL_EXAMPLE = `curl -X POST https://api.freeall.ai/v1/chat \\
   -H "Authorization: Bearer sk-freeall-xxxxx" \\
@@ -76,6 +44,7 @@ const RESPONSE_EXAMPLE = `{
 }`;
 
 export default async function Home() {
+  const { locale, t } = await getTranslations();
   const user = await getCurrentUser();
   const catalog = await getProviderCatalog();
   const providers = catalog.filter((preset) => preset.id !== "custom");
@@ -113,35 +82,43 @@ export default async function Home() {
               href="#cara-kerja"
               className="hidden px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
             >
-              Cara kerja
+              {t.common.howItWorks}
             </a>
             <a
               href="#api"
               className="hidden px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
             >
-              API
+              {t.common.api}
             </a>
+            <Link
+              href="/pricing"
+              className="hidden px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
+            >
+              {t.common.pricing}
+            </Link>
             <Link
               href="/docs"
               className="hidden px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
             >
-              Dokumentasi
+              {t.common.docs}
             </Link>
+            <LanguageSwitcher current={locale} />
             <ThemeToggle />
             {user ? (
+
               <Button asChild size="sm">
                 <Link href="/dashboard">
-                  Dashboard
+                  {t.common.dashboard}
                   <ArrowRight />
                 </Link>
               </Button>
             ) : (
               <>
                 <Button asChild variant="ghost" size="sm">
-                  <Link href="/login">Masuk</Link>
+                  <Link href="/login">{t.common.login}</Link>
                 </Button>
                 <Button asChild size="sm">
-                  <Link href="/register">Daftar gratis</Link>
+                  <Link href="/register">{t.common.register}</Link>
                 </Button>
               </>
             )}
@@ -162,42 +139,34 @@ export default async function Home() {
             <div className="space-y-7">
               <Badge variant="outline" className="gap-1.5">
                 <Code className="size-3" />
-                Gratis untuk dipakai · Bisa di-self-host
+                {t.home.badge}
               </Badge>
 
               <div className="space-y-5">
                 <h1 className="text-balance text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl">
-                  Routing AI{" "}
-                  <span className="text-primary">tanpa batas</span>
+                  {t.home.titleLead}{" "}
+                  <span className="text-primary">{t.home.titleAccent}</span>
                 </h1>
 
                 <p className="max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
-                  Kumpulkan API key gratisan Anda dari berbagai penyedia AI di
-                  satu tempat. Saat satu kunci kena limit, permintaan otomatis
-                  diteruskan ke model dan kunci berikutnya — aplikasi Anda tidak
-                  perlu tahu apa-apa.
+                  {t.home.subtitle}
                 </p>
               </div>
 
               <div className="flex flex-wrap gap-3">
                 <Button asChild size="lg">
                   <Link href={user ? "/dashboard" : "/register"}>
-                    {user ? "Buka dashboard" : "Mulai gratis"}
+                    {user ? t.home.ctaPrimaryLoggedIn : t.home.ctaPrimary}
                     <ArrowRight />
                   </Link>
                 </Button>
                 <Button asChild variant="outline" size="lg">
-                  <Link href="/docs">Lihat cara kerjanya</Link>
+                  <Link href="/docs">{t.home.ctaSecondary}</Link>
                 </Button>
               </div>
 
               <ul className="grid gap-2 pt-1 sm:grid-cols-2">
-                {[
-                  "Tanpa kartu kredit",
-                  "Kunci dienkripsi AES-256",
-                  "Fallback model dan kunci",
-                  "Bisa di-self-host penuh",
-                ].map((item) => (
+                {t.home.perks.map((item) => (
                   <li
                     key={item}
                     className="flex items-center gap-2 text-sm text-muted-foreground"
@@ -216,7 +185,7 @@ export default async function Home() {
                 pengunjung mengetik lalu menerima error.
               */}
               {activeProviders > 0 ? (
-                <DemoChat />
+                <DemoChat t={t.demo} />
               ) : (
                 <Card>
                   <CardContent className="flex flex-col items-center gap-4 p-10 text-center">
@@ -225,17 +194,15 @@ export default async function Home() {
                     </span>
                     <div className="space-y-2">
                       <h2 className="font-semibold">
-                        Demo sedang tidak tersedia
+                        {t.home.demoUnavailableTitle}
                       </h2>
                       <p className="text-sm text-muted-foreground">
-                        Admin belum menyediakan Provider Publik untuk dicoba
-                        pengunjung. Daftar dan tambahkan API key gratisan Anda
-                        sendiri untuk mulai memakai gateway.
+                        {t.home.demoUnavailableBody}
                       </p>
                     </div>
                     <Button asChild variant="outline">
                       <Link href="/register">
-                        Daftar gratis
+                        {t.common.register}
                         <ArrowRight />
                       </Link>
                     </Button>
@@ -252,15 +219,15 @@ export default async function Home() {
             <div className="mx-auto grid max-w-7xl gap-6 px-4 py-10 sm:grid-cols-3 sm:px-6 lg:px-8">
               <Stat
                 value={formatNumber(activeProviders)}
-                label="Kunci aktif di Provider Publik"
+                label={t.home.statsKeys}
               />
               <Stat
                 value={formatNumber(requestsToday)}
-                label="Request diproses hari ini"
+                label={t.home.statsRequests}
               />
               <Stat
                 value={successRate === null ? "—" : `${successRate}%`}
-                label="Berhasil dijawab"
+                label={t.home.statsSuccess}
               />
             </div>
           </section>
@@ -274,24 +241,26 @@ export default async function Home() {
           <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
             <div className="max-w-2xl">
               <p className="text-sm font-medium uppercase tracking-wider text-primary">
-                Cara kerja
+                {t.home.stepsEyebrow}
               </p>
               <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-                Tiga langkah, tanpa konfigurasi rumit
+                {t.home.stepsTitle}
               </h2>
             </div>
 
             <ol className="mt-10 grid gap-6 md:grid-cols-3">
-              {STEPS.map((step, index) => (
+              {t.home.steps.map((step, index) => {
+                const Icon = STEP_ICONS[index];
+                return (
                 <li key={step.title}>
                   <Card className="h-full transition-colors hover:border-primary/40">
                     <CardContent className="p-6">
                       <div className="flex items-center gap-3">
                         <span className="flex size-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                          <step.icon className="size-4" />
+                          <Icon className="size-4" />
                         </span>
                         <span className="text-sm font-medium text-muted-foreground">
-                          Langkah {index + 1}
+                          {t.home.stepLabel} {index + 1}
                         </span>
                       </div>
                       <h3 className="mt-4 font-semibold">{step.title}</h3>
@@ -301,7 +270,8 @@ export default async function Home() {
                     </CardContent>
                   </Card>
                 </li>
-              ))}
+                );
+              })}
             </ol>
           </div>
         </section>
@@ -311,19 +281,20 @@ export default async function Home() {
           <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
             <div className="max-w-2xl">
               <p className="text-sm font-medium uppercase tracking-wider text-primary">
-                Inti sistem
+                {t.home.fallbackEyebrow}
               </p>
               <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-                Fallback berlapis, bukan sekadar coba ulang
+                {t.home.fallbackTitle}
               </h2>
               <p className="mt-3 text-pretty text-muted-foreground">
-                Penyedia gratis menghitung kuota per model, bukan per akun.
-                Karena itu gateway turun bertahap: model dulu, baru kunci.
+                {t.home.fallbackSubtitle}
               </p>
             </div>
 
             <div className="mt-10 grid gap-6 md:grid-cols-3">
-              {FALLBACK_LAYERS.map((layer) => (
+              {t.home.fallbackLayers.map((layer, index) => {
+                const Icon = LAYER_ICONS[index];
+                return (
                 <Card
                   key={layer.title}
                   className="transition-colors hover:border-primary/40"
@@ -331,7 +302,7 @@ export default async function Home() {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between gap-2">
                       <span className="flex size-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                        <layer.icon className="size-4" />
+                        <Icon className="size-4" />
                       </span>
                       <Badge variant="secondary">{layer.accent}</Badge>
                     </div>
@@ -341,7 +312,8 @@ export default async function Home() {
                     </p>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           </div>
         </section>
@@ -351,14 +323,13 @@ export default async function Home() {
           <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
             <div className="max-w-2xl">
               <p className="text-sm font-medium uppercase tracking-wider text-primary">
-                Penyedia
+                {t.home.providersEyebrow}
               </p>
               <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-                {providers.length} penyedia siap pakai
+                {t.home.providersTitle(providers.length)}
               </h2>
               <p className="mt-3 text-muted-foreground">
-                {freeProviders.length} di antaranya punya tier gratis. Penyedia
-                lain yang kompatibel format OpenAI bisa ditambahkan sendiri.
+                {t.home.providersSubtitle(freeProviders.length)}
               </p>
             </div>
 
@@ -371,7 +342,7 @@ export default async function Home() {
                   {preset.label}
                   {preset.free && (
                     <span className="text-xs font-medium text-primary">
-                      gratis
+                      {t.common.free}
                     </span>
                   )}
                 </span>
@@ -385,26 +356,24 @@ export default async function Home() {
           <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
             <div className="max-w-2xl">
               <p className="text-sm font-medium uppercase tracking-wider text-primary">
-                API
+                {t.home.apiEyebrow}
               </p>
               <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-                Satu endpoint, semua penyedia
+                {t.home.apiTitle}
               </h2>
               <p className="mt-3 text-muted-foreground">
-                Generate API key di dashboard, lalu panggil endpoint yang sama
-                dari aplikasi Anda. Gateway yang memilihkan penyedianya.
+                {t.home.apiSubtitle}
               </p>
             </div>
 
             <div className="mt-10 grid gap-4 lg:grid-cols-2">
-              <CodeBlock title="Request" code={CURL_EXAMPLE} />
-              <CodeBlock title="Response" code={RESPONSE_EXAMPLE} />
+              <CodeBlock title={t.home.request} code={CURL_EXAMPLE} />
+              <CodeBlock title={t.home.response} code={RESPONSE_EXAMPLE} />
             </div>
 
             <p className="mt-4 text-sm text-muted-foreground">
-              <code className="font-mono text-xs">attempts: 2</code> menandakan
-              kunci pertama kena limit dan permintaan diteruskan otomatis —
-              aplikasi Anda tetap menerima jawaban.
+              <code className="font-mono text-xs">attempts: 2</code>{" "}
+              {t.home.apiNote}
             </p>
           </div>
         </section>
@@ -419,17 +388,15 @@ export default async function Home() {
                 </span>
                 <div className="space-y-3">
                   <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-                    Mulai dalam satu menit
+                    {t.home.finalTitle}
                   </h2>
                   <p className="mx-auto max-w-lg text-pretty text-muted-foreground">
-                    Daftar, tempel satu API key gratisan, generate kunci
-                    FreeAll AI, dan aplikasi Anda sudah punya gateway AI dengan
-                    fallback otomatis.
+                    {t.home.finalBody}
                   </p>
                 </div>
                 <Button asChild size="lg">
                   <Link href={user ? "/dashboard" : "/register"}>
-                    {user ? "Buka dashboard" : "Daftar gratis"}
+                    {user ? t.home.ctaPrimaryLoggedIn : t.common.register}
                     <ArrowRight />
                   </Link>
                 </Button>
@@ -439,22 +406,8 @@ export default async function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-border">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:px-6 lg:px-8">
-          <div className="flex items-center gap-2">
-            <span className="flex size-6 items-center justify-center rounded-md bg-primary/15 text-primary">
-              <Zap className="size-3" />
-            </span>
-            <span>FreeAll AI — Routing AI tanpa batas.</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link href="/docs" className="transition-colors hover:text-foreground">
-              Dokumentasi
-            </Link>
-            <span>Bisa di-self-host sepenuhnya.</span>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
+
     </div>
   );
 }

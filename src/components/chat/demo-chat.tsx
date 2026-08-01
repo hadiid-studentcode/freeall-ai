@@ -5,6 +5,7 @@ import { Loader2, Send, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import type { Dictionary } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 interface Turn {
@@ -13,7 +14,7 @@ interface Turn {
   meta?: { provider: string; model: string; attempts: number; latencyMs: number };
 }
 
-export function DemoChat() {
+export function DemoChat({ t }: { t: Dictionary["demo"] }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
@@ -59,7 +60,7 @@ export function DemoChat() {
       if (typeof data.remaining === "number") setRemaining(data.remaining);
 
       if (!response.ok || !data.success) {
-        setError(data.error ?? "Gagal menghubungi gateway.");
+        setError(data.error ?? t.gatewayError);
         if (response.status === 429) setRemaining(0);
         return;
       }
@@ -78,7 +79,7 @@ export function DemoChat() {
         },
       ]);
     } catch {
-      setError("Jaringan bermasalah. Coba lagi.");
+      setError(t.networkError);
     } finally {
       setPending(false);
       scrollToBottom();
@@ -89,11 +90,11 @@ export function DemoChat() {
     <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <Sparkles className="size-4 text-primary" />
-        <span className="text-sm font-medium">Coba langsung</span>
+        <span className="text-sm font-medium">{t.title}</span>
         <span className="ml-auto text-xs text-muted-foreground">
           {remaining === null
-            ? "tanpa perlu daftar"
-            : `sisa ${remaining} percakapan`}
+            ? t.noSignup
+            : t.remaining.replace("{n}", String(remaining))}
         </span>
       </div>
 
@@ -109,8 +110,7 @@ export function DemoChat() {
       >
         {turns.length === 0 && (
           <p className="py-10 text-center text-sm text-muted-foreground">
-            Tanyakan apa saja. Gateway akan memilih provider yang tersedia dan
-            otomatis pindah kalau ada yang kena limit.
+            {t.empty}
           </p>
         )}
 
@@ -134,7 +134,7 @@ export function DemoChat() {
               {turn.meta && (
                 <p className="mt-2 text-xs opacity-70">
                   {turn.meta.provider} · {turn.meta.model} ·{" "}
-                  {turn.meta.attempts}× percobaan · {turn.meta.latencyMs} ms
+                  {turn.meta.attempts}× {t.attempts} · {turn.meta.latencyMs} ms
                 </p>
               )}
             </div>
@@ -145,7 +145,7 @@ export function DemoChat() {
           <div className="flex justify-start">
             <div className="flex items-center gap-2 rounded-xl bg-secondary px-3.5 py-2.5 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
-              Mencari provider yang tersedia…
+              {t.thinking}
             </div>
           </div>
         )}
@@ -168,7 +168,7 @@ export function DemoChat() {
               void send(event);
             }
           }}
-          placeholder="Tulis pertanyaan Anda…"
+          placeholder={t.placeholder}
           rows={2}
           maxLength={2000}
           className="min-h-0 resize-none"
@@ -176,7 +176,7 @@ export function DemoChat() {
         />
         <Button type="submit" size="icon" disabled={pending || !input.trim()}>
           {pending ? <Loader2 className="animate-spin" /> : <Send />}
-          <span className="sr-only">Kirim</span>
+          <span className="sr-only">{t.send}</span>
         </Button>
       </form>
     </div>

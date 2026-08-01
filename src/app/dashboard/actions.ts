@@ -11,6 +11,7 @@ import {
 import { findProvider } from "@/lib/ai/catalog";
 import { verifyProviderKey } from "@/lib/ai/verify";
 import { requireUser } from "@/lib/auth/guard";
+import { assertSafeExternalUrl } from "@/lib/security/url-guard";
 import { resolvePlan } from "@/lib/plans";
 import {
   decryptSecret,
@@ -53,7 +54,7 @@ export async function createApiKeyAction(
 
   const account = await prisma.user.findUniqueOrThrow({
     where: { id: user.id },
-    select: { plan: true, planExpiresAt: true },
+    select: { plan: true, planExpiresAt: true, role: true },
   });
   const plan = resolvePlan(account);
 
@@ -204,8 +205,11 @@ export async function createProviderKeyAction(
       error: "Base URL wajib diisi untuk penyedia yang tidak punya preset.",
     };
   }
-  if (!/^https:\/\//i.test(resolvedBaseUrl)) {
-    return { error: "Base URL harus memakai HTTPS." };
+  // Base URL diisi pengguna dan dipanggil oleh server ini, jadi harus dijaga
+  // agar tidak bisa dipakai menembak jaringan internal (SSRF).
+  const urlCheck = await assertSafeExternalUrl(resolvedBaseUrl);
+  if (!urlCheck.ok) {
+    return { error: urlCheck.reason };
   }
 
   // Penyedia dipilih manual tanpa nama model: cari model yang hidup sebelum

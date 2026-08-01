@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Check, Heart, Server } from "lucide-react";
 
+import { SiteFooter } from "@/components/site-footer";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,7 +48,7 @@ export default async function PricingPage() {
   const account = user
     ? await prisma.user.findUnique({
         where: { id: user.id },
-        select: { plan: true, planExpiresAt: true },
+        select: { plan: true, planExpiresAt: true, role: true },
       })
     : null;
   const currentPlan = account ? resolvePlan(account) : null;
@@ -69,6 +71,7 @@ export default async function PricingPage() {
             >
               Dokumentasi
             </Link>
+            <ThemeToggle />
             <Button asChild size="sm">
               <Link href={user ? "/dashboard" : "/register"}>
                 {user ? "Dashboard" : "Daftar gratis"}
@@ -246,6 +249,7 @@ function Row({ label, value }: { label: string; value: string }) {
     <div className="flex justify-between gap-2">
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="font-medium tabular-nums">{value}</dd>
+      <SiteFooter />
     </div>
   );
 }

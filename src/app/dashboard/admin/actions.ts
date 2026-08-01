@@ -5,8 +5,12 @@ import { revalidatePath } from "next/cache";
 import type { Plan } from "@/generated/prisma/enums";
 import { requireAdmin } from "@/lib/auth/guard";
 import { PLAN_ORDER } from "@/lib/plans";
+import { assertSafeExternalUrl } from "@/lib/security/url-guard";
 import { prisma } from "@/lib/prisma";
-import { setPublicDailyLimit } from "@/lib/settings";
+import {
+  setDemoGlobalDailyLimit,
+  setPublicDailyLimit,
+} from "@/lib/settings";
 
 /**
  * Aksi khusus admin.
@@ -86,6 +90,19 @@ export async function updateUserPlanAction(formData: FormData): Promise<void> {
   revalidatePath("/dashboard/admin");
 }
 
+/** Batas total percakapan demo dari seluruh pengunjung dalam sehari. */
+export async function updateDemoGlobalLimitAction(
+  formData: FormData,
+): Promise<void> {
+  await requireAdmin();
+  const limit = Number(formData.get("limit") ?? -1);
+
+  if (!Number.isInteger(limit) || limit < 0 || limit > 1_000_000) return;
+
+  await setDemoGlobalDailyLimit(limit);
+  revalidatePath("/dashboard/admin");
+}
+
 /** Naikkan atau turunkan peran seorang pengguna. */
 export async function toggleUserRoleAction(formData: FormData): Promise<void> {
   const admin = await requireAdmin();
@@ -152,8 +169,8 @@ export async function createCustomProviderAction(
   const free = formData.get("free") === "on";
 
   if (!slug || !label || !baseUrl || !defaultModel) return;
-  if (!/^https:\/\//i.test(baseUrl)) return;
   if (!["openai", "gemini", "anthropic"].includes(format)) return;
+  if (!(await assertSafeExternalUrl(baseUrl)).ok) return;
 
   await prisma.customProvider.upsert({
     where: { slug },

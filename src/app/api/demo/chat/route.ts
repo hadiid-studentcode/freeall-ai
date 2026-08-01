@@ -7,6 +7,7 @@ import {
 } from "@/lib/ai/ai-manager";
 import { parseChatPayload } from "@/lib/api/chat-payload";
 import {
+  checkDemoGlobalQuota,
   consumeIpRateLimit,
   demoLimitPerHour,
   getClientIp,
@@ -22,6 +23,21 @@ export const runtime = "nodejs";
  * jumlah token dibatasi, dan hanya menerima satu prompt (bukan riwayat panjang).
  */
 export async function POST(request: Request) {
+  // Pagar total lebih dulu: inilah yang melindungi biaya operator dari
+  // banyak IP berbeda, sesuatu yang tidak bisa dilakukan batas per-IP.
+  const globalQuota = await checkDemoGlobalQuota();
+  if (!globalQuota.allowed) {
+    return NextResponse.json(
+      { success: false, error: globalQuota.reason },
+      {
+        status: 429,
+        headers: globalQuota.retryAfterSeconds
+          ? { "Retry-After": String(globalQuota.retryAfterSeconds) }
+          : undefined,
+      },
+    );
+  }
+
   const ip = getClientIp(request);
   const limit = peekIpRateLimit(ip);
 

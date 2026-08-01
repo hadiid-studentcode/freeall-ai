@@ -52,7 +52,7 @@ export async function authenticateRequest(
       isActive: true,
       dailyLimit: true,
       userId: true,
-      user: { select: { plan: true, planExpiresAt: true } },
+      user: { select: { plan: true, planExpiresAt: true, role: true } },
     },
   });
 

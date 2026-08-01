@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import {
@@ -9,12 +10,21 @@ import {
 } from "@/lib/auth/session";
 import { hashPassword, verifyPassword } from "@/lib/crypto";
 import { prisma } from "@/lib/prisma";
+import { checkLoginAttempts, recordFailedLogin } from "@/lib/rate-limit";
 
 export interface AuthFormState {
   error?: string;
 }
 
 const MIN_PASSWORD_LENGTH = 8;
+
+/** IP pemanggil, untuk membatasi percobaan masuk per sumber. */
+async function callerIp(): Promise<string> {
+  const store = await headers();
+  const forwarded = store.get("x-forwarded-for");
+  if (forwarded) return forwarded.split(",")[0].trim();
+  return store.get("x-real-ip")?.trim() || "unknown";
+}
 
 function readCredentials(formData: FormData) {
   return {
@@ -70,6 +80,19 @@ export async function loginAction(
 ): Promise<AuthFormState> {
   const { email, password } = readCredentials(formData);
 
+  const ip = await callerIp();
+
+  // Tahan penebakan kata sandi berulang sebelum menyentuh database.
+  const throttle = checkLoginAttempts(email, ip);
+  if (!throttle.allowed) {
+    const minutes = Math.ceil((throttle.retryAfterSeconds ?? 0) / 60);
+    return {
+      error:
+        `Terlalu banyak percobaan masuk yang gagal. ` +
+        `Coba lagi dalam ${minutes} menit.`,
+    };
+  }
+
   const user = await prisma.user.findUnique({
     where: { email },
     select: { id: true, passwordHash: true },
@@ -78,8 +101,14 @@ export async function loginAction(
   // Pesan error sengaja disamakan untuk email tidak ada dan sandi salah,
   // supaya tidak bisa dipakai menebak email mana yang terdaftar.
   const invalid = { error: "Email atau kata sandi salah." };
-  if (!user) return invalid;
-  if (!(await verifyPassword(password, user.passwordHash))) return invalid;
+  if (!user) {
+    recordFailedLogin(email, ip);
+    return invalid;
+  }
+  if (!(await verifyPassword(password, user.passwordHash))) {
+    recordFailedLogin(email, ip);
+    return invalid;
+  }
 
   await pruneExpiredSessions();
   await createSession(user.id);

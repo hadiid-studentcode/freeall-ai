@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   ScrollText,
   Server,
+  Sparkles,
   TerminalSquare,
   ShieldCheck,
 } from "lucide-react";
@@ -19,6 +20,7 @@ const LINKS = [
   { href: "/dashboard/api-keys", label: "API Key", icon: KeyRound },
   { href: "/dashboard/playground", label: "Playground", icon: TerminalSquare },
   { href: "/dashboard/logs", label: "Riwayat", icon: ScrollText },
+  { href: "/dashboard/plan", label: "Paket", icon: Sparkles },
 ];
 
 const ADMIN_LINK = {

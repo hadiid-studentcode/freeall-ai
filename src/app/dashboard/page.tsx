@@ -88,7 +88,7 @@ export default async function DashboardPage() {
     }),
     prisma.user.findUniqueOrThrow({
       where: { id: user.id },
-      select: { plan: true, planExpiresAt: true },
+      select: { plan: true, planExpiresAt: true, role: true },
     }),
   ]);
 
@@ -113,9 +113,9 @@ export default async function DashboardPage() {
         </div>
         <div className="flex items-center gap-3">
           <Link
-            href="/pricing"
+            href="/dashboard/plan"
             className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:border-primary/40"
-            title="Lihat paket dan batasnya"
+            title="Lihat paket, kuota, dan pemakaian Anda"
           >
             <span className="text-muted-foreground">Paket</span>
             <Badge variant={plan.id === "FREE" ? "secondary" : "default"}>

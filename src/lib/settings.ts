@@ -10,10 +10,13 @@ import { prisma } from "@/lib/prisma";
 export const SETTING_KEYS = {
   /** Kuota harian untuk user yang belum membawa kunci provider sendiri. */
   publicDailyLimit: "public_daily_limit",
+  /** Batas total percakapan demo dari SELURUH pengunjung dalam sehari. */
+  demoGlobalDailyLimit: "demo_global_daily_limit",
 } as const;
 
 /** Dipakai bila admin belum pernah mengatur nilainya. */
 export const DEFAULT_PUBLIC_DAILY_LIMIT = 50;
+export const DEFAULT_DEMO_GLOBAL_DAILY_LIMIT = 500;
 
 /**
  * Kuota harian pengguna yang mengandalkan Provider Publik.
@@ -38,6 +41,34 @@ export async function setPublicDailyLimit(limit: number): Promise<void> {
   await prisma.setting.upsert({
     where: { key: SETTING_KEYS.publicDailyLimit },
     create: { key: SETTING_KEYS.publicDailyLimit, value: String(limit) },
+    update: { value: String(limit) },
+  });
+}
+
+/**
+ * Pagar total untuk demo halaman depan.
+ *
+ * Batas per IP saja tidak melindungi operator: seribu pengunjung berbeda
+ * berarti seribu jatah terpisah, dan kunci publik bisa terkuras dalam sehari.
+ * Angka ini membatasi seluruh trafik demo digabung, sehingga biaya terburuk
+ * per hari bisa diperkirakan. Isi 0 untuk mematikan demo sepenuhnya.
+ */
+export async function getDemoGlobalDailyLimit(): Promise<number> {
+  const row = await prisma.setting.findUnique({
+    where: { key: SETTING_KEYS.demoGlobalDailyLimit },
+    select: { value: true },
+  });
+
+  const parsed = Number(row?.value);
+  return Number.isInteger(parsed) && parsed >= 0
+    ? parsed
+    : DEFAULT_DEMO_GLOBAL_DAILY_LIMIT;
+}
+
+export async function setDemoGlobalDailyLimit(limit: number): Promise<void> {
+  await prisma.setting.upsert({
+    where: { key: SETTING_KEYS.demoGlobalDailyLimit },
+    create: { key: SETTING_KEYS.demoGlobalDailyLimit, value: String(limit) },
     update: { value: String(limit) },
   });
 }

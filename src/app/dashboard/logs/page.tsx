@@ -36,7 +36,7 @@ export default async function LogsPage() {
 
   const account = await prisma.user.findUniqueOrThrow({
     where: { id: user.id },
-    select: { plan: true, planExpiresAt: true },
+    select: { plan: true, planExpiresAt: true, role: true },
   });
   const plan = resolvePlan(account);
 

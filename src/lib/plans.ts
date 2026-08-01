@@ -1,4 +1,4 @@
-import type { Plan } from "@/generated/prisma/enums";
+import type { Plan, Role } from "@/generated/prisma/enums";
 
 /**
  * Definisi paket langganan — satu sumber kebenaran.
@@ -93,6 +93,28 @@ export const PLANS: Record<Plan, PlanLimits> = {
 export const PLAN_ORDER: Plan[] = ["FREE", "PRO", "TEAM"];
 
 /**
+ * Batas untuk admin — praktis tanpa batas.
+ *
+ * Admin adalah pengelola instance ini, bukan pelanggannya: dia yang
+ * menyediakan Provider Publik dan menentukan kuota orang lain, jadi tidak
+ * masuk akal kalau dirinya sendiri ikut dibatasi paket. Sengaja TIDAK
+ * dimasukkan ke `PLAN_ORDER` agar tidak muncul sebagai paket yang bisa dibeli.
+ */
+export const ADMIN_PLAN: PlanLimits = {
+  id: "TEAM",
+  label: "Admin",
+  pricePerMonth: 0,
+  tagline: "Akses penuh sebagai pengelola instance.",
+  // Angka besar tapi terbatas, bukan Infinity — supaya tetap aman dipakai
+  // pada perhitungan persentase dan atribut `max` di formulir.
+  maxApiKeys: 1_000,
+  publicDailyLimit: 1_000_000,
+  logRetentionDays: 3_650,
+  burstPerMinute: 600,
+  features: ["Tanpa batas paket", "Kelola Provider Publik", "Kelola pengguna"],
+};
+
+/**
  * Paket yang benar-benar berlaku untuk seorang pengguna.
  *
  * Langganan yang sudah lewat masa berlakunya diperlakukan sebagai FREE tanpa
@@ -102,7 +124,11 @@ export const PLAN_ORDER: Plan[] = ["FREE", "PRO", "TEAM"];
 export function resolvePlan(user: {
   plan: Plan;
   planExpiresAt: Date | null;
+  role?: Role;
 }): PlanLimits {
+  // Admin selalu mendapat akses penuh, terlepas dari kolom paketnya.
+  if (user.role === "ADMIN") return ADMIN_PLAN;
+
   if (
     user.plan !== "FREE" &&
     user.planExpiresAt !== null &&

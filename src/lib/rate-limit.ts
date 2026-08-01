@@ -1,7 +1,10 @@
 import { isProduction } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { resolvePlan } from "@/lib/plans";
-import { getPublicDailyLimit } from "@/lib/settings";
+import {
+  getDemoGlobalDailyLimit,
+  getPublicDailyLimit,
+} from "@/lib/settings";
 
 /**
  * Fase 4 — pembatasan pemakaian.
@@ -73,7 +76,7 @@ export async function checkPublicPoolQuota(
     prisma.providerKey.count({ where: { userId, isActive: true } }),
     prisma.user.findUnique({
       where: { id: userId },
-      select: { plan: true, planExpiresAt: true },
+      select: { plan: true, planExpiresAt: true, role: true },
     }),
   ]);
 
@@ -191,8 +194,11 @@ export function checkBurstLimit(
  * - di mode pengembangan batas dimatikan sepenuhnya;
  * - di produksi bisa diatur lewat `DEMO_RATE_LIMIT` (0 = tanpa batas).
  */
-const DEMO_LIMIT = Number(process.env.DEMO_RATE_LIMIT ?? 20);
+const DEMO_LIMIT = Number(process.env.DEMO_RATE_LIMIT ?? 10);
 const DEMO_WINDOW_MS = 60 * 60_000;
+/** Batas kedua per IP, sepanjang hari — menahan pemakaian jam demi jam. */
+const DEMO_DAILY_LIMIT = DEMO_LIMIT * 3;
+const DEMO_DAY_MS = 24 * 60 * 60_000;
 const DEMO_LIMIT_ENABLED =
   isProduction && Number.isFinite(DEMO_LIMIT) && DEMO_LIMIT > 0;
 
@@ -207,12 +213,59 @@ const UNLIMITED: RateLimitResult = { allowed: true, remaining: Infinity };
  */
 export function peekIpRateLimit(ip: string): RateLimitResult {
   if (!DEMO_LIMIT_ENABLED) return UNLIMITED;
-  return consume(`ip:${ip}`, DEMO_LIMIT, DEMO_WINDOW_MS, false);
+
+  // Dua jendela sekaligus: yang per jam menahan lonjakan, yang harian
+  // menahan pemakaian yang dicicil sepanjang hari.
+  const hourly = consume(`ip:h:${ip}`, DEMO_LIMIT, DEMO_WINDOW_MS, false);
+  if (!hourly.allowed) return hourly;
+
+  return consume(`ip:d:${ip}`, DEMO_DAILY_LIMIT, DEMO_DAY_MS, false);
 }
 
 export function consumeIpRateLimit(ip: string): RateLimitResult {
   if (!DEMO_LIMIT_ENABLED) return UNLIMITED;
-  return consume(`ip:${ip}`, DEMO_LIMIT, DEMO_WINDOW_MS, true);
+  consume(`ip:d:${ip}`, DEMO_DAILY_LIMIT, DEMO_DAY_MS, true);
+  return consume(`ip:h:${ip}`, DEMO_LIMIT, DEMO_WINDOW_MS, true);
+}
+
+/**
+ * Pagar total demo dari seluruh pengunjung hari ini.
+ *
+ * Berbasis database, bukan memori, karena inilah yang benar-benar melindungi
+ * biaya operator dan harus tetap akurat walau aplikasi berjalan di banyak
+ * instance sekaligus.
+ */
+export async function checkDemoGlobalQuota(): Promise<RateLimitResult> {
+  const limit = await getDemoGlobalDailyLimit();
+  if (limit === 0) {
+    return {
+      allowed: false,
+      remaining: 0,
+      reason: "Demo halaman depan sedang dimatikan oleh admin.",
+    };
+  }
+
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const used = await prisma.requestLog.count({
+    where: { source: "demo", createdAt: { gte: startOfDay } },
+  });
+
+  if (used >= limit) {
+    const nextMidnight = new Date(startOfDay);
+    nextMidnight.setDate(nextMidnight.getDate() + 1);
+    return {
+      allowed: false,
+      remaining: 0,
+      retryAfterSeconds: Math.ceil((nextMidnight.getTime() - Date.now()) / 1000),
+      reason:
+        "Kuota demo harian untuk seluruh pengunjung sudah habis. " +
+        "Daftar gratis untuk memakai gateway dengan kuota Anda sendiri.",
+    };
+  }
+
+  return { allowed: true, remaining: limit - used };
 }
 
 export const demoLimitPerHour = DEMO_LIMIT_ENABLED ? DEMO_LIMIT : null;
@@ -222,4 +275,41 @@ export function getClientIp(request: Request): string {
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) return forwarded.split(",")[0].trim();
   return request.headers.get("x-real-ip")?.trim() || "unknown";
+}
+
+/* -------------------------------------------------------------------------- */
+/* Pembatas percobaan masuk                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Batasi percobaan login dan pendaftaran.
+ *
+ * Tanpa ini, kata sandi bisa ditebak berulang-ulang tanpa hambatan. Dihitung
+ * per identitas (email) maupun per IP: yang pertama menahan serangan ke satu
+ * akun tertentu, yang kedua menahan penyisiran banyak akun dari satu sumber.
+ *
+ * Jatah hanya berkurang saat percobaan GAGAL, sehingga pemakaian normal tidak
+ * pernah terkena.
+ */
+const LOGIN_MAX_ATTEMPTS = 8;
+const LOGIN_WINDOW_MS = 15 * 60_000;
+
+export function checkLoginAttempts(
+  email: string,
+  ip: string,
+): RateLimitResult {
+  const byEmail = consume(
+    `login:email:${email}`,
+    LOGIN_MAX_ATTEMPTS,
+    LOGIN_WINDOW_MS,
+    false,
+  );
+  if (!byEmail.allowed) return byEmail;
+
+  return consume(`login:ip:${ip}`, LOGIN_MAX_ATTEMPTS * 3, LOGIN_WINDOW_MS, false);
+}
+
+export function recordFailedLogin(email: string, ip: string): void {
+  consume(`login:email:${email}`, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS, true);
+  consume(`login:ip:${ip}`, LOGIN_MAX_ATTEMPTS * 3, LOGIN_WINDOW_MS, true);
 }

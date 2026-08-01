@@ -1,10 +1,18 @@
 # FreeAll AI
 
-> **Routing AI tanpa batas.** API Gateway open-source dengan sistem fallback cerdas.
+> **Routing AI tanpa batas.** API Gateway dengan sistem fallback cerdas.
 
-FreeAll AI menyatukan banyak penyedia AI (Groq, Gemini, DeepSeek, Mistral, OpenRouter, …) di balik satu endpoint. Saat sebuah API key kena limit (HTTP 429), gateway otomatis meneruskan permintaan ke kunci berikutnya — aplikasi Anda tidak perlu tahu apa pun soal itu.
+FreeAll AI berdiri di antara aplikasi Anda dan puluhan penyedia AI. Aplikasi memanggil **satu endpoint**; gateway yang mengurus kunci mana yang dipakai, model mana yang masih punya kuota, dan apa yang dilakukan saat sebuah kunci kehabisan jatah.
 
-Konsepnya **Crowdsourced BYOK** (Bring Your Own Key): pengguna mendaftarkan API key tier-gratis mereka ke kolam bersama, dan sistem merutekan permintaan ke kunci yang masih punya kuota.
+Konsepnya **Crowdsourced BYOK** (Bring Your Own Key): daftarkan API key tier-gratis Anda, dan sistem merutekan permintaan ke kunci yang masih punya sisa kuota.
+
+---
+
+## Kenapa ini ada
+
+Penyedia AI gratis menghitung kuota **per model**, bukan per akun. Satu kunci Gemini yang membalas `429` pada `gemini-2.0-flash` sering masih punya jatah di `gemini-flash-lite-latest`. Nama model juga cepat usang — model yang kemarin jalan bisa membalas `404 no longer available` hari ini.
+
+FreeAll AI menangani keduanya secara otomatis, sehingga aplikasi Anda tidak perlu tahu.
 
 ---
 
@@ -12,14 +20,15 @@ Konsepnya **Crowdsourced BYOK** (Bring Your Own Key): pengguna mendaftarkan API 
 
 | | |
 |---|---|
-| **Tempel key, selesai** | Sistem mengenali penyedianya dari kuncinya, menanyakan model apa yang masih hidup, memilih yang terbaik, lalu mengujinya — tanpa Anda mengisi Base URL atau nama model. |
-| **Fallback dua lapis** | Model utama kena limit → coba **model lain pada kunci yang sama** (kuota gratis dihitung per model). Semua model kunci itu habis → pindah ke kunci berikutnya. |
-| **Menyembuhkan diri** | Model cadangan yang berhasil otomatis naik jadi model utama, jadi request berikutnya tidak lagi membuang percobaan ke model yang sedang habis. |
-| **Multi-provider** | 13 preset (Groq, Gemini, **Claude**, OpenRouter, Cerebras, NVIDIA, xAI, Fireworks, OpenAI, DeepSeek, Mistral, Together, SambaNova) + endpoint kustom apa pun yang OpenAI-compatible. |
-| **Enkripsi kunci** | API key penyedia dienkripsi AES-256-GCM sebelum masuk database. |
-| **Kunci SaaS** | `sk-freeall-…` per aplikasi, disimpan sebagai hash — tidak bisa dibaca ulang. |
-| **Rate limiting** | Kuota harian per API key (berbasis DB) + burst limiter per menit. |
-| **Dashboard** | Kelola provider, API key, dan lihat riwayat request beserta jumlah percobaan fallback. |
+| **Tempel key, selesai** | Penyedia dikenali dari bentuk kuncinya, model yang masih hidup ditanyakan langsung ke sumbernya, lalu diuji sekali sebelum disimpan. |
+| **Fallback dua lapis** | Model kena limit → coba model lain pada kunci yang sama. Semua model habis → pindah ke kunci berikutnya. |
+| **Menyembuhkan diri** | Model cadangan yang berhasil otomatis naik jadi model utama. |
+| **13+ penyedia** | Groq, Gemini, Claude, OpenRouter, Cerebras, NVIDIA, xAI, Fireworks, OpenAI, DeepSeek, Mistral, Together, SambaNova — plus penyedia kustom yang bisa ditambah admin tanpa deploy ulang. |
+| **Isolasi kunci** | Kunci pribadi hanya dipakai pemiliknya. Kunci publik dikelola admin dan dibagi bersama. |
+| **Paket berlangganan** | FREE / PRO / TEAM dengan batas kuota, API key, retensi riwayat, dan lonjakan. |
+| **Enkripsi** | Kunci provider dienkripsi AES-256-GCM. Kunci SaaS disimpan sebagai hash. |
+| **Dwibahasa** | Bahasa Indonesia dan Inggris. |
+| **Tema** | Terang, gelap, atau ikut sistem. |
 
 ---
 
@@ -34,18 +43,17 @@ Konsepnya **Crowdsourced BYOK** (Bring Your Own Key): pengguna mendaftarkan API 
 
 ## Mulai
 
-### 1. Prasyarat
+### Prasyarat
 
-- Node.js 20.19+ (proyek ini diuji di Node 26)
+- Node.js 20.19+
 - PostgreSQL 14+
 
-> **Catatan lingkungan ini:** Node dikelola FlyEnv dan hanya ter-export di `.bashrc`.
-> Kalau memakai zsh, jalankan dulu:
+> **Catatan lingkungan ini:** Node dikelola FlyEnv dan hanya ter-export di `.bashrc`. Kalau memakai zsh:
 > ```bash
 > export PATH="$HOME/.config/FlyEnv/env/node/bin:$PATH"
 > ```
 
-### 2. Install & konfigurasi
+### Pasang
 
 ```bash
 npm install
@@ -60,9 +68,9 @@ SHADOW_DATABASE_URL="postgresql://user:password@localhost:5432/freeall_shadow"
 ENCRYPTION_KEY="$(npm run --silent gen:secret)"
 ```
 
-> ⚠️ **Simpan `ENCRYPTION_KEY` baik-baik.** Kalau hilang atau berubah, semua ProviderKey yang sudah tersimpan tidak bisa didekripsi lagi dan harus dimasukkan ulang.
+> ⚠️ **Simpan `ENCRYPTION_KEY` baik-baik.** Kalau hilang atau berubah, semua ProviderKey yang tersimpan tidak bisa didekripsi lagi.
 
-### 3. Siapkan database
+### Jalankan
 
 ```bash
 npm run db:deploy     # terapkan migrasi
@@ -70,30 +78,17 @@ npm run db:generate   # generate Prisma Client
 npm run dev
 ```
 
-Buka <http://localhost:3000>, lalu daftar. **User pertama otomatis menjadi ADMIN.**
+Buka <http://localhost:3000> lalu daftar. **User pertama otomatis menjadi ADMIN.**
 
-### 4. Tambahkan kunci provider
+### Tambahkan kunci provider
 
-Masuk ke **Dashboard → Provider AI** dan cukup **tempel API key** Anda — biarkan penyedia pada "Deteksi otomatis". Sistem akan:
-
-1. mengenali penyedianya dari bentuk kunci (`sk-ant-` → Claude, `gsk_` → Groq, `AIza`/`AQ.` → Gemini, dst.), atau mengujinya ke beberapa kandidat bila awalannya generik seperti `sk-…`;
-2. menanyakan ke penyedia itu **model apa yang benar-benar hidup** untuk kunci Anda;
-3. memilih model terbaik — mengutamakan yang bertanda `:free`, lalu alias `-latest` yang tidak ikut usang, lalu varian ringan (flash/mini/lite) yang kuotanya paling longgar;
-4. menguji dengan satu panggilan nyata sebelum menyimpan.
-
-Kunci yang gagal uji tetap disimpan tapi **dinonaktifkan** beserta alasannya, agar tidak memperlambat setiap request fallback.
-
-> **Kenapa modelnya tidak dipatok saja?** Karena nama model cepat usang. Contoh nyata: `gemini-2.0-flash` masih terdaftar tapi kuota gratisnya sudah ditutup (429 dengan `limit: 0`), dan `gemini-2.5-flash` membalas 404 "no longer available". Menanyakan daftar model yang hidup jauh lebih tahan waktu daripada memercayai konstanta di kode.
-
-Sebelum ada minimal satu ProviderKey aktif, `/api/v1/chat` akan membalas `503`.
+**Dashboard → Provider AI**, tempel API key, biarkan penyedia pada "Deteksi otomatis". Sistem akan mengenali penyedia, mencari model yang hidup, memilih yang terbaik, dan mengujinya.
 
 ---
 
 ## Pemakaian API
 
-Generate kunci di **Dashboard → API Key** (nilai penuhnya hanya ditampilkan sekali).
-
-### `POST /api/v1/chat`
+Generate kunci di **Dashboard → API Key** (nilai penuhnya hanya ditampilkan sekali), lalu uji lewat **Dashboard → Playground** tanpa menulis kode.
 
 ```bash
 curl -X POST http://localhost:3000/api/v1/chat \
@@ -102,54 +97,40 @@ curl -X POST http://localhost:3000/api/v1/chat \
   -d '{"prompt": "Halo!"}'
 ```
 
-Bentuk percakapan multi-giliran juga diterima:
-
-```json
-{
-  "messages": [
-    { "role": "system", "content": "Jawab dalam Bahasa Indonesia." },
-    { "role": "user", "content": "Halo!" }
-  ],
-  "temperature": 0.7,
-  "max_tokens": 1024,
-  "provider": "groq"
-}
-```
-
-`provider` bersifat opsional — mengisinya membatasi fallback ke penyedia tersebut saja.
-
-**Respons sukses:**
-
 ```json
 {
   "success": true,
-  "response": "Halo juga! Ada yang bisa saya bantu?",
-  "provider": "gemini",
-  "model": "gemini-2.0-flash",
-  "attempts": 2,
+  "response": "Halo juga!",
+  "provider": "groq",
+  "model": "llama-3.1-8b-instant",
+  "attempts": 3,
   "latencyMs": 812,
-  "usage": { "promptTokens": 8, "completionTokens": 12, "totalTokens": 20 },
   "fallbacks": [
-    { "provider": "groq", "status": 429, "error": "Rate limit reached" }
+    { "provider": "gemini", "status": 429, "error": "Quota exceeded" }
   ]
 }
 ```
 
-`attempts: 2` dan isi `fallbacks` menunjukkan kunci pertama kena limit lalu permintaan diteruskan — inti dari sistem ini.
+`attempts: 3` berarti dua percobaan sebelumnya gagal dan permintaan diteruskan otomatis.
+
+Bentuk `messages` untuk percakapan multi-giliran juga diterima, beserta `temperature`, `max_tokens`, dan `provider`.
+
+### Endpoint
+
+| Endpoint | Keterangan |
+|---|---|
+| `POST /api/v1/chat` | Endpoint utama. Butuh API key. |
+| `GET /api/v1/models` | Daftar provider/model aktif. Butuh API key. |
+| `POST /api/demo/chat` | Demo landing page. Tanpa API key, dibatasi ketat. |
 
 ### Kode status
 
-| Status | Arti |
+| Kode | Arti |
 |---|---|
 | `400` | Body tidak valid |
-| `401` | API key hilang, salah, atau sudah dinonaktifkan |
-| `429` | Kuota harian atau burst limit terlampaui (lihat header `Retry-After`) |
-| `503` | Tidak ada provider aktif, atau semua kunci gagal |
-
-### Endpoint lain
-
-- `GET /api/v1/models` — daftar provider/model yang siap melayani (butuh API key)
-- `POST /api/demo/chat` — demo landing page, tanpa API key, dibatasi per IP
+| `401` | API key hilang, salah, atau dinonaktifkan |
+| `429` | Kuota harian, kuota publik, atau batas lonjakan terlampaui |
+| `503` | Tidak ada kunci yang bisa dipakai, atau semuanya gagal |
 
 ---
 
@@ -158,7 +139,8 @@ Bentuk percakapan multi-giliran juga diterima:
 ```
 src/lib/ai/
 ├── interfaces/ai-strategy.interface.ts   Kontrak AiStrategy + klasifikasi error
-├── providers.ts                          Katalog penyedia (baseUrl, model, pola kunci)
+├── providers.ts                          Preset bawaan (baseUrl, model, pola kunci)
+├── catalog.ts                            Gabungan preset bawaan + penyedia dari admin
 ├── discovery.ts                          Deteksi penyedia + pemilihan model hidup
 ├── verify.ts                             Uji koneksi sekali sebelum menyimpan
 ├── strategies/
@@ -170,48 +152,42 @@ src/lib/ai/
 └── ai-manager.ts                         Loop fallback + pembaruan status kunci
 ```
 
-Menambah penyedia berformat OpenAI cukup dengan menambahkan satu entri di `providers.ts`. Penyedia dengan format request khas (seperti Gemini dan Claude) butuh satu kelas strategy baru — dan itulah satu-satunya tempat perbedaannya hidup.
+**Alur satu request:** autentikasi → rate limit → `AiManager` (kunci × model) → penyedia AI → `RequestLog`.
 
-**Alur satu request:**
+Dibatasi `MAX_KEYS` (6 kunci) dan `MAX_ATTEMPTS` (10 percobaan) agar latensi terkendali.
 
-1. `route.ts` memverifikasi kunci SaaS, lalu mengecek kuota harian dan burst limit
-2. `AiManager` mengambil ProviderKey aktif, urut `priority desc, errorCount asc`
-3. Untuk tiap kunci, untuk tiap model (`modelName` lalu `fallbackModels`): `AiFactory.create()` → `strategy.chat()`
-4. **429 / 404** → model itu saja yang bermasalah, coba model berikutnya pada kunci yang sama
-5. **401/403** → kunci ditolak permanen, dimatikan dan seluruh modelnya dilewati
-6. **Sukses** → loop berhenti; bila yang berhasil adalah model cadangan, model itu dinaikkan jadi utama
-7. Hasil dan jumlah percobaan dicatat ke `RequestLog`
+Menambah penyedia berformat OpenAI cukup satu entri di `providers.ts` — atau lewat dashboard admin, tanpa deploy. Penyedia dengan format khas (Gemini, Claude) butuh satu kelas strategy baru.
 
-Dibatasi `MAX_KEYS` (6 kunci) dan `MAX_ATTEMPTS` (10 percobaan kunci × model) agar latensi tetap terkendali.
-
-### Kenapa fallback per model penting
-
-Penyedia gratis menghitung kuota **per model**, bukan per akun. Gemini yang membalas
-`429 … Quota exceeded for … model: gemini-2.0-flash` masih punya jatah di
-`gemini-flash-lite-latest` dengan kunci yang sama. Tanpa lapis ini, satu kunci
-yang kehabisan kuota akan langsung dianggap mati padahal belum.
-
-Tidak ada kode fallback yang perlu diubah saat menambah penyedia.
-
-> **Catatan Anthropic:** `AnthropicStrategy` sengaja **tidak** mengirim `temperature`. Model Claude generasi terbaru (Opus 5, Opus 4.8/4.7, Sonnet 5) menolak parameter sampling dengan HTTP 400, jadi meneruskannya justru akan mematikan kunci tersebut.
+> **Catatan Anthropic:** `AnthropicStrategy` sengaja tidak mengirim `temperature`. Model Claude terbaru menolak parameter sampling dengan HTTP 400.
 
 ### Model data
 
-- **User** — pengguna dashboard; user pertama menjadi ADMIN
-- **Session** — sesi login; DB menyimpan hash token, cookie membawa nilai mentahnya
-- **ApiKey** — kunci SaaS `sk-freeall-…`; disimpan sebagai hash + prefix tampilan
-- **ProviderKey** — inti fallback; kunci terenkripsi + `baseUrl`/`modelName` yang bisa dikustomisasi
-- **RequestLog** — riwayat eksekusi; jadi sumber statistik dashboard dan hitungan kuota harian
+| Model | Isi |
+|---|---|
+| `User` | Akun; user pertama jadi ADMIN. Punya `plan` dan `planExpiresAt`. |
+| `Session` | Sesi login; DB menyimpan hash token. |
+| `ApiKey` | Kunci SaaS `sk-freeall-…`; disimpan sebagai hash + prefix tampilan. |
+| `ProviderKey` | Inti fallback; kunci terenkripsi, `fallbackModels`, dan `scope` (PRIVATE/SHARED). |
+| `RequestLog` | Riwayat eksekusi; sumber statistik dan kuota harian. |
+| `CustomProvider` | Penyedia tambahan yang didaftarkan admin. |
+| `Setting` | Pengaturan yang bisa diubah admin tanpa deploy. |
 
 ---
 
-## Catatan keamanan
+## Keamanan
 
-- Kunci penyedia dienkripsi AES-256-GCM (authenticated encryption); yang tersimpan di kolom unik hanya SHA-256-nya, untuk mencegah duplikat
-- Kunci SaaS tidak pernah disimpan dalam bentuk asli — tidak bisa dipulihkan, hanya bisa diganti
-- Password di-hash dengan scrypt dan diverifikasi memakai `timingSafeEqual`
-- Setiap Server Action memanggil `requireUser()` dan memfilter query dengan `userId`, karena Server Action bisa dipicu lewat POST langsung tanpa melewati UI
-- Burst limiter berjalan di memori proses, jadi **hanya berlaku per instance**. Untuk penegakan ketat di deployment multi-replica, ganti bagian itu di `src/lib/rate-limit.ts` dengan Redis. Kuota harian tetap akurat karena dihitung dari database.
+- Kunci provider dienkripsi **AES-256-GCM**; yang disimpan di kolom unik hanya SHA-256-nya
+- Kunci SaaS tidak pernah disimpan dalam bentuk asli
+- Password di-hash **scrypt**, diverifikasi dengan `timingSafeEqual`
+- Setiap Server Action memanggil `requireUser()`/`requireAdmin()` dan memfilter query dengan `userId` — Server Action bisa dipicu POST langsung tanpa melewati UI
+- **Penjaga SSRF**: Base URL penyedia diresolusi DNS-nya dan ditolak kalau mengarah ke loopback, jaringan privat, atau link-local (termasuk endpoint metadata cloud)
+- **Pembatas percobaan masuk**: 8 kegagalan per email dan 24 per IP dalam 15 menit
+- Header keamanan: `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, plus HSTS dan CSP di produksi
+
+**Batasan yang perlu diketahui:**
+
+- Burst limiter berjalan di memori proses, jadi hanya berlaku **per instance**. Untuk penegakan ketat di deployment multi-replica, ganti bagian itu di `src/lib/rate-limit.ts` dengan Redis. Kuota harian tetap akurat karena berbasis database.
+- Penjaga SSRF mengurangi risiko, bukan menghapusnya (masih ada celah teoretis DNS rebinding). Untuk penjagaan penuh, batasi tujuan di tingkat jaringan lewat proxy egress.
 
 ---
 
@@ -219,16 +195,17 @@ Tidak ada kode fallback yang perlu diubah saat menambah penyedia.
 
 | Perintah | Fungsi |
 |---|---|
-| `npm run dev` | Jalankan server pengembangan |
+| `npm run dev` | Server pengembangan |
 | `npm run build` | Build produksi |
 | `npm run db:migrate` | Buat + terapkan migrasi (butuh shadow DB) |
 | `npm run db:deploy` | Terapkan migrasi yang sudah ada |
-| `npm run db:studio` | Buka Prisma Studio |
+| `npm run db:studio` | Prisma Studio |
 | `npm run db:seed` | Buat akun admin awal |
-| `npm run gen:secret` | Generate nilai `ENCRYPTION_KEY` |
+| `npm run gen:secret` | Generate `ENCRYPTION_KEY` |
 
 ---
 
-## Lisensi
+## Dokumen lain
 
-Open source — silakan self-host sepenuhnya.
+- [`docs/MODEL-BISNIS.md`](docs/MODEL-BISNIS.md) — posisi produk, model pendapatan, dan pegangan untuk bicara ke calon pengguna atau investor
+- `/docs` di aplikasi — penjelasan visual cara kerja sistem, lengkap dengan diagram alur

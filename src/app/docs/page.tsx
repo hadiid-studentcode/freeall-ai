@@ -6,6 +6,8 @@ import {
   KeyScopeDiagram,
   RequestFlowDiagram,
 } from "@/components/docs/diagrams";
+import { SiteFooter } from "@/components/site-footer";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -64,6 +66,7 @@ export default async function DocsPage() {
             <ArrowLeft className="size-4" />
             Kembali
           </Link>
+          <ThemeToggle />
           <Button asChild size="sm">
             <Link href={user ? "/dashboard" : "/register"}>
               {user ? "Dashboard" : "Daftar gratis"}
@@ -494,6 +497,7 @@ export default async function DocsPage() {
           </CardContent>
         </Card>
       </main>
+      <SiteFooter />
     </div>
   );
 }
