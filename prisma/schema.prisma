@@ -1,40 +1,114 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// FreeAll AI — Skema Database
+// Dokumentasi: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 
+  // Tanpa ini, client hasil generate memakai import relatif tanpa ekstensi
+  // (mis. "./enums"). Next.js bisa meresolusinya, tapi Node ESM tidak —
+  // sehingga skrip di luar Next (prisma/seed.ts) gagal jalan.
+  importFileExtension = "ts"
+}
 
 datasource db {
   provider = "postgresql"
-  
 }
 
+enum Role {
+  USER
+  ADMIN
+}
+
+/// Pengguna web / pelanggan SaaS.
 model User {
   id           String        @id @default(uuid())
   email        String        @unique
   name         String?
-  apiKeys      ApiKey[]      // API Key yang dibuat user untuk memakai SaaS kita
-  providerKeys ProviderKey[] // API Key AI (Gemini/Groq) yang disumbangkan user ke sistem
+  passwordHash String
+  role         Role          @default(USER)
+  apiKeys      ApiKey[] // Kunci SaaS yang dibuat user untuk memakai gateway ini
+  providerKeys ProviderKey[] // Kunci AI (Groq/Gemini/dll) yang disumbangkan user
+  sessions     Session[]
   createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 }
 
-model ApiKey {
-  id        String     @id @default(uuid())
-  key       String     @unique 
+/// Sesi login dashboard. Cookie hanya membawa token mentah; DB menyimpan hash-nya.
+model Session {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
   userId    String
-  user      User       @relation(fields: [userId], references: [id])
-  isActive  Boolean    @default(true)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
-// TABEL BARU: Tempat menyimpan koleksi API Key dari berbagai AI
+/// Kunci otorisasi SaaS (sk-freeall-xxx) untuk memanggil /api/v1/chat.
+/// Kunci mentah tidak pernah disimpan — hanya SHA-256-nya, jadi tidak bisa ditampilkan ulang.
+model ApiKey {
+  id         String       @id @default(uuid())
+  name       String       @default("Default")
+  keyHash    String       @unique
+  keyPrefix  String // Potongan awal + akhir untuk ditampilkan di dashboard
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isActive   Boolean      @default(true)
+  dailyLimit Int          @default(500)
+  lastUsedAt DateTime?
+  createdAt  DateTime     @default(now())
+  logs       RequestLog[]
+
+  @@index([userId])
+}
+
+/// Inti fallback: koleksi API key dari berbagai vendor AI.
+/// Kunci mentah dienkripsi AES-256-GCM; keyHash dipakai untuk mencegah duplikat.
 model ProviderKey {
-  id           String   @id @default(uuid())
-  providerName String   // Contoh: "Groq" atau "Gemini"
-  key          String   @unique
-  userId       String?  // Null jika ditambahkan oleh Admin, terisi jika donasi dari User
-  user         User?    @relation(fields: [userId], references: [id])
-  isActive     Boolean  @default(true)
-  priority     Int      @default(0) // Semakin tinggi angkanya, semakin awal dieksekusi
-  errorCount   Int      @default(0) // Mencatat berapa kali key ini gagal (limit)
-  createdAt    DateTime @default(now())
+  id             String    @id @default(uuid())
+  providerName   String // "groq", "gemini", "deepseek", ...
+  keyCiphertext  String
+  keyHash        String    @unique
+  keyPreview     String // "gsk_abc…9f2c"
+  format         String    @default("openai") // "openai" | "gemini"
+  baseUrl        String? // Override endpoint; kosong = pakai preset provider
+  modelName      String? // Override model; kosong = pakai default preset
+  userId         String? // Null jika ditambahkan Admin
+  user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isActive       Boolean   @default(true)
+  priority       Int       @default(0) // Makin tinggi, makin awal dicoba
+  errorCount     Int       @default(0)
+  successCount   Int       @default(0)
+  lastUsedAt     DateTime?
+  lastErrorAt    DateTime?
+  lastError      String?
+  disabledReason String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([isActive, priority])
+  @@index([userId])
+}
+
+/// Riwayat eksekusi. Dipakai untuk statistik dashboard dan penghitungan kuota harian.
+model RequestLog {
+  id            String   @id @default(uuid())
+  apiKeyId      String?
+  apiKey        ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  providerKeyId String?
+  providerName  String?
+  modelName     String?
+  success       Boolean
+  statusCode    Int?
+  attempts      Int      @default(1)
+  latencyMs     Int?
+  errorMessage  String?
+  source        String   @default("api") // "api" | "demo"
+  createdAt     DateTime @default(now())
+
+  @@index([apiKeyId, createdAt])
+  @@index([createdAt])
 }

@@ -10,6 +10,9 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
+    // prisma/seed.ts dijalankan langsung oleh Node (type stripping), yang
+    // mensyaratkan ekstensi .ts eksplisit pada import relatif.
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,

@@ -1,159 +1,252 @@
-const summaryCards = [
-  { label: "Provider keys", value: "24", delta: "+12%" },
-  { label: "Active providers", value: "8", delta: "+8%" },
-  { label: "Requests today", value: "3.8k", delta: "+34%" },
-];
+import type { ReactNode } from "react";
+import Link from "next/link";
+import {
+  Activity,
+  ArrowRight,
+  CheckCircle2,
+  KeyRound,
+  Server,
+  TriangleAlert,
+} from "lucide-react";
 
-const providers = [
-  {
-    provider: "Gemini",
-    status: "Active",
-    priority: 10,
-    owner: "Admin",
-    lastActive: "2 mins ago",
-  },
-  {
-    provider: "Groq",
-    status: "Active",
-    priority: 9,
-    owner: "Team Beta",
-    lastActive: "6 mins ago",
-  },
-  {
-    provider: "Gemini",
-    status: "Paused",
-    priority: 2,
-    owner: "Guest",
-    lastActive: "1h ago",
-  },
-  {
-    provider: "Custom AI",
-    status: "Active",
-    priority: 7,
-    owner: "Partner",
-    lastActive: "18 mins ago",
-  },
-];
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { requireUser } from "@/lib/auth/guard";
+import { prisma } from "@/lib/prisma";
+import { formatNumber, formatRelative } from "@/lib/utils";
 
-function statusBadge(status: string) {
-  const base = "rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ";
-  if (status === "Active") {
-    return base + "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/25";
-  }
-  if (status === "Paused") {
-    return base + "bg-amber-500/10 text-amber-300 ring-1 ring-amber-500/20";
-  }
-  return base + "bg-slate-700/70 text-slate-200 ring-1 ring-white/10";
+export const metadata = { title: "Ringkasan · FreeAll AI" };
+
+export default async function DashboardPage() {
+  const user = await requireUser();
+
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const [
+    activeProviders,
+    totalProviders,
+    activeApiKeys,
+    requestsToday,
+    successToday,
+    disabledProviders,
+    recentProviders,
+  ] = await Promise.all([
+    // Kolam kunci dipakai bersama semua user, jadi hitungan provider bersifat global.
+    prisma.providerKey.count({ where: { isActive: true } }),
+    prisma.providerKey.count(),
+    prisma.apiKey.count({ where: { userId: user.id, isActive: true } }),
+    prisma.requestLog.count({
+      where: { apiKey: { userId: user.id }, createdAt: { gte: startOfDay } },
+    }),
+    prisma.requestLog.count({
+      where: {
+        apiKey: { userId: user.id },
+        createdAt: { gte: startOfDay },
+        success: true,
+      },
+    }),
+    prisma.providerKey.findMany({
+      where: { userId: user.id, isActive: false },
+      select: { id: true, providerName: true, disabledReason: true },
+      take: 5,
+    }),
+    prisma.providerKey.findMany({
+      where: { userId: user.id },
+      orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+      take: 5,
+      select: {
+        id: true,
+        providerName: true,
+        modelName: true,
+        isActive: true,
+        priority: true,
+        successCount: true,
+        errorCount: true,
+        lastUsedAt: true,
+      },
+    }),
+  ]);
+
+  const successRate =
+    requestsToday === 0
+      ? null
+      : Math.round((successToday / requestsToday) * 100);
+
+  return (
+    <div className="space-y-8">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            Ringkasan
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Selamat datang kembali{user.name ? `, ${user.name}` : ""}. Berikut
+            kondisi gateway Anda hari ini.
+          </p>
+        </div>
+        <Button asChild>
+          <Link href="/dashboard/providers">
+            Tambah provider
+            <ArrowRight />
+          </Link>
+        </Button>
+      </header>
+
+      {totalProviders === 0 && (
+        <Alert variant="warning">
+          <TriangleAlert />
+          <AlertDescription>
+            Belum ada ProviderKey di sistem, jadi endpoint{" "}
+            <code className="font-mono text-xs">/api/v1/chat</code> masih akan
+            membalas 503.{" "}
+            <Link
+              href="/dashboard/providers"
+              className="font-medium underline underline-offset-4"
+            >
+              Tambahkan minimal satu kunci provider
+            </Link>{" "}
+            untuk mengaktifkannya.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          icon={<Server className="size-4" />}
+          label="Provider aktif"
+          value={formatNumber(activeProviders)}
+          hint={`dari ${formatNumber(totalProviders)} kunci terdaftar`}
+        />
+        <StatCard
+          icon={<KeyRound className="size-4" />}
+          label="API key aktif"
+          value={formatNumber(activeApiKeys)}
+          hint="milik akun Anda"
+        />
+        <StatCard
+          icon={<Activity className="size-4" />}
+          label="Request hari ini"
+          value={formatNumber(requestsToday)}
+          hint="lewat API key Anda"
+        />
+        <StatCard
+          icon={<CheckCircle2 className="size-4" />}
+          label="Tingkat sukses"
+          value={successRate === null ? "—" : `${successRate}%`}
+          hint={
+            successRate === null
+              ? "belum ada request hari ini"
+              : `${formatNumber(successToday)} dari ${formatNumber(requestsToday)} berhasil`
+          }
+        />
+      </div>
+
+      {disabledProviders.length > 0 && (
+        <Alert variant="destructive">
+          <TriangleAlert />
+          <AlertDescription className="space-y-1">
+            <p className="font-medium">
+              {disabledProviders.length} kunci provider Anda sedang nonaktif.
+            </p>
+            <ul className="list-inside list-disc opacity-90">
+              {disabledProviders.map((provider) => (
+                <li key={provider.id}>
+                  <span className="capitalize">{provider.providerName}</span> —{" "}
+                  {provider.disabledReason ?? "alasan tidak tercatat"}
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Kunci provider Anda</CardTitle>
+          <CardDescription>
+            Diurutkan sesuai prioritas eksekusi — yang paling atas dicoba lebih
+            dulu.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {recentProviders.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Anda belum menyumbang kunci provider apa pun.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {recentProviders.map((provider) => (
+                <li
+                  key={provider.id}
+                  className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                >
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-2 font-medium capitalize">
+                      {provider.providerName}
+                      <Badge
+                        variant={provider.isActive ? "success" : "destructive"}
+                      >
+                        {provider.isActive ? "Aktif" : "Nonaktif"}
+                      </Badge>
+                    </p>
+                    <p className="truncate font-mono text-xs text-muted-foreground">
+                      {provider.modelName ?? "model bawaan preset"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                    <span>Prioritas {provider.priority}</span>
+                    <span className="text-success">
+                      ✓ {formatNumber(provider.successCount)}
+                    </span>
+                    <span className="text-destructive">
+                      ✕ {formatNumber(provider.errorCount)}
+                    </span>
+                    <span className="hidden sm:inline">
+                      {formatRelative(provider.lastUsedAt)}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
-export default function DashboardPage() {
+function StatCard({
+  icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  hint: string;
+}) {
   return (
-    <div className="space-y-10">
-      <section className="space-y-4">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.24em] text-slate-400">
-              Overview
-            </p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-              AI provider dashboard
-            </h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">
-              Review the latest provider key health, usage numbers, and provider activity in one intuitive admin view.
-            </p>
-          </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <button className="inline-flex items-center justify-center rounded-full bg-slate-800 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700">
-              Add provider key
-            </button>
-            <button className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:border-slate-600">
-              Sync status
-            </button>
-          </div>
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          {icon}
+          <span className="text-xs font-medium uppercase tracking-wider">
+            {label}
+          </span>
         </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          {summaryCards.map((card) => (
-            <div key={card.label} className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-slate-950/20">
-              <p className="text-sm font-medium uppercase tracking-[0.24em] text-slate-400">
-                {card.label}
-              </p>
-              <p className="mt-4 text-3xl font-semibold text-white">{card.value}</p>
-              <p className="mt-2 text-sm text-emerald-300">{card.delta} vs yesterday</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
-        <div className="rounded-[32px] border border-white/10 bg-slate-900/80 p-8 shadow-xl shadow-slate-950/20">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-semibold text-white">Provider keys</h2>
-              <p className="mt-2 text-sm text-slate-400">Monitor active and paused provider keys with priority and last activity.</p>
-            </div>
-            <span className="rounded-full bg-slate-800/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
-              24 keys
-            </span>
-          </div>
-
-          <div className="mt-8 overflow-hidden rounded-3xl border border-white/10 bg-slate-950/90">
-            <table className="min-w-full border-collapse text-left text-sm">
-              <thead className="bg-slate-950/90 text-slate-400">
-                <tr>
-                  <th className="px-6 py-4">Provider</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4">Priority</th>
-                  <th className="px-6 py-4">Last active</th>
-                  <th className="px-6 py-4">Owner</th>
-                </tr>
-              </thead>
-              <tbody>
-                {providers.map((provider) => (
-                  <tr key={`${provider.provider}-${provider.priority}-${provider.owner}`} className="border-t border-white/5 hover:bg-slate-950/80">
-                    <td className="px-6 py-5 font-medium text-white">{provider.provider}</td>
-                    <td className="px-6 py-5">
-                      <span className={statusBadge(provider.status)}>{provider.status}</span>
-                    </td>
-                    <td className="px-6 py-5 text-slate-300">{provider.priority}</td>
-                    <td className="px-6 py-5 text-slate-300">{provider.lastActive}</td>
-                    <td className="px-6 py-5 text-slate-300">{provider.owner}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          <div className="rounded-[32px] border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-slate-950/20">
-            <h2 className="text-xl font-semibold text-white">Activity feed</h2>
-            <p className="mt-2 text-sm text-slate-400">Recent provider key events and insights for your team.</p>
-            <div className="mt-6 space-y-4">
-              <div className="rounded-3xl bg-slate-950/90 p-4">
-                <p className="text-sm text-slate-300">Gemini key used for 250 requests. Priority remains healthy.</p>
-                <p className="mt-2 text-xs text-slate-500">3 minutes ago</p>
-              </div>
-              <div className="rounded-3xl bg-slate-950/90 p-4">
-                <p className="text-sm text-slate-300">Groq donation key added by Team Beta.</p>
-                <p className="mt-2 text-xs text-slate-500">12 minutes ago</p>
-              </div>
-              <div className="rounded-3xl bg-slate-950/90 p-4">
-                <p className="text-sm text-slate-300">Paused a low-performing provider to preserve request capacity.</p>
-                <p className="mt-2 text-xs text-slate-500">1 hour ago</p>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-[32px] border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-slate-950/20">
-            <h2 className="text-xl font-semibold text-white">Today&apos;s highlights</h2>
-            <ul className="mt-6 space-y-3 text-sm text-slate-300">
-              <li className="rounded-3xl bg-slate-950/90 p-4">Uptime across active providers stays above 99.7%.</li>
-              <li className="rounded-3xl bg-slate-950/90 p-4">Average request latency improved by 15% compared to yesterday.</li>
-              <li className="rounded-3xl bg-slate-950/90 p-4">Recommended action: add one more donation key for peak traffic.</li>
-            </ul>
-          </div>
-        </div>
-      </section>
-    </div>
+        <p className="mt-3 text-2xl font-semibold tabular-nums">{value}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+      </CardContent>
+    </Card>
   );
 }

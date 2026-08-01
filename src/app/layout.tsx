@@ -13,8 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Freeall AI",
-  description: "Freeall AI dashboard for managing provider keys, usage, and AI integrations.",
+  title: {
+    default: "FreeAll AI — Routing AI tanpa batas",
+    template: "%s",
+  },
+  description:
+    "API Gateway open-source dengan sistem fallback cerdas. Daftarkan API key gratisan Anda dari Groq, Gemini, DeepSeek, dan lainnya.",
 };
 
 export default function RootLayout({
@@ -24,12 +28,12 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      lang="id"
+      // Aplikasi memakai tema gelap permanen; kelas `dark` mengaktifkan
+      // blok variabel warna di globals.css.
+      className={`dark ${geistSans.variable} ${geistMono.variable} h-full`}
     >
-      <body className="min-h-full bg-slate-950 text-slate-50 font-sans">
-        {children}
-      </body>
+      <body className="min-h-full">{children}</body>
     </html>
   );
 }

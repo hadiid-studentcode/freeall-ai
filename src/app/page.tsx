@@ -1,126 +1,224 @@
 import Link from "next/link";
+import {
+  ArrowRight,
+  Code,
+  Factory,
+  Layers,
+  Repeat,
+  ShieldCheck,
+  Zap,
+} from "lucide-react";
 
-const features = [
+import { DemoChat } from "@/components/chat/demo-chat";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { PROVIDER_PRESETS } from "@/lib/ai/providers";
+import { getCurrentUser } from "@/lib/auth/session";
+
+const PATTERNS = [
   {
-    title: "Provider key management",
-    description:
-      "Collect provider API keys, share donated AI capacity, and keep every key healthy with usage and status insights.",
+    icon: Layers,
+    title: "Strategy Pattern",
+    body: "Setiap penyedia mematuhi satu kontrak AiStrategy. UniversalStrategy menangani ratusan API berformat OpenAI, GeminiStrategy mengurung format unik Google.",
   },
   {
-    title: "Smart dashboards",
-    description:
-      "See active AI providers, usage trends, and available request capacity with a polished, modern admin interface.",
+    icon: Factory,
+    title: "Factory Pattern",
+    body: "AiFactory merakit objek penyedia dari baris database. Kolom baseUrl dan modelName membuat penyedia baru bisa ditambahkan tanpa menyentuh kode.",
   },
   {
-    title: "One place for growth",
-    description:
-      "Build a central AI marketplace for your team, partners, and customers without managing dozens of separate integrations.",
+    icon: Repeat,
+    title: "Fallback Manager",
+    body: "AiManager menelusuri kunci aktif sesuai prioritas. Kena 429 dicatat lalu lanjut; kena 401 kuncinya dimatikan otomatis.",
   },
 ];
 
-export default function Home() {
+const CURL_EXAMPLE = `curl -X POST https://localhost:3000/api/v1/chat \\
+  -H "Authorization: Bearer sk-freeall-xxxxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{"prompt": "Halo!"}'`;
+
+const RESPONSE_EXAMPLE = `{
+  "success": true,
+  "response": "Halo juga! Ada yang bisa saya bantu?",
+  "provider": "gemini",
+  "model": "gemini-2.0-flash",
+  "attempts": 2,
+  "latencyMs": 812
+}`;
+
+export default async function Home() {
+  const user = await getCurrentUser();
+  const providers = PROVIDER_PRESETS.filter((preset) => preset.id !== "custom");
+
   return (
-    <main className="min-h-screen bg-slate-950 px-6 py-10 sm:px-10 lg:px-16">
-      <div className="mx-auto flex max-w-7xl flex-col gap-16">
-        <section className="grid gap-10 lg:grid-cols-[1.4fr_1fr] lg:items-center">
-          <div className="max-w-2xl space-y-8">
-            <div className="inline-flex rounded-full bg-slate-800/80 px-4 py-2 text-sm font-medium text-slate-300 ring-1 ring-slate-700/80">
-              Dashboard UI ready
-            </div>
-            <div className="space-y-6">
-              <h1 className="text-5xl font-semibold tracking-tight text-white sm:text-6xl">
-                Freeall AI
-              </h1>
-              <p className="max-w-xl text-lg leading-8 text-slate-300">
-                Build and manage a modern AI provider dashboard with ready-made views for keys, activity, and contribution status.
-              </p>
-            </div>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <Link
-                href="/dashboard"
-                className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-slate-950/10 transition hover:bg-slate-100"
-              >
-                Open dashboard
-              </Link>
-              <a
-                href="#features"
-                className="inline-flex items-center justify-center rounded-full border border-slate-700 px-6 py-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:text-white"
-              >
-                Explore features
-              </a>
-            </div>
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+          <Link href="/" className="flex items-center gap-2">
+            <span className="flex size-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
+              <Zap className="size-4" />
+            </span>
+            <span className="font-semibold">FreeAll AI</span>
+          </Link>
+
+          <div className="flex items-center gap-2">
+            {user ? (
+              <Button asChild size="sm">
+                <Link href="/dashboard">
+                  Dashboard
+                  <ArrowRight />
+                </Link>
+              </Button>
+            ) : (
+              <>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/login">Masuk</Link>
+                </Button>
+                <Button asChild size="sm">
+                  <Link href="/register">Daftar gratis</Link>
+                </Button>
+              </>
+            )}
           </div>
-          <div className="rounded-[32px] border border-white/10 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/40 ring-1 ring-white/5">
-            <div className="mb-6 flex items-center justify-between gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-slate-400">
-                  Live insights
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">
-                  Key performance at a glance
-                </h2>
-              </div>
-              <span className="rounded-full bg-slate-800/90 px-3 py-1 text-xs font-medium text-slate-300">
-                100% server rendered
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-7xl space-y-24 px-4 py-16 sm:px-6 lg:px-8">
+        {/* Hero + demo */}
+        <section className="grid gap-10 lg:grid-cols-[1.1fr_1fr] lg:items-center">
+          <div className="space-y-6">
+            <Badge variant="outline" className="gap-1.5">
+              <Code className="size-3" />
+              Open source · Self-hosted &amp; SaaS
+            </Badge>
+
+            <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
+              Routing AI{" "}
+              <span className="text-primary">tanpa batas</span>
+            </h1>
+
+            <p className="max-w-xl text-lg leading-relaxed text-muted-foreground">
+              API Gateway dengan sistem fallback cerdas. Daftarkan API key
+              gratisan Anda dari Groq, Gemini, DeepSeek, dan lainnya — saat satu
+              kunci kena limit, permintaan otomatis diteruskan ke kunci
+              berikutnya.
+            </p>
+
+            <div className="flex flex-wrap gap-3">
+              <Button asChild size="lg">
+                <Link href={user ? "/dashboard" : "/register"}>
+                  {user ? "Buka dashboard" : "Mulai gratis"}
+                  <ArrowRight />
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="lg">
+                <a href="#api">Lihat contoh API</a>
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <span className="text-xs text-muted-foreground">
+                Preset siap pakai:
               </span>
+              {providers.map((preset) => (
+                <Badge key={preset.id} variant="secondary">
+                  {preset.label}
+                </Badge>
+              ))}
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-3xl bg-slate-950/70 p-5">
-                <p className="text-sm text-slate-400">Available providers</p>
-                <p className="mt-4 text-3xl font-semibold text-white">8</p>
-              </div>
-              <div className="rounded-3xl bg-slate-950/70 p-5">
-                <p className="text-sm text-slate-400">Active keys</p>
-                <p className="mt-4 text-3xl font-semibold text-white">24</p>
-              </div>
-              <div className="rounded-3xl bg-slate-950/70 p-5 sm:col-span-2">
-                <p className="text-sm text-slate-400">Requests processed today</p>
-                <p className="mt-4 text-3xl font-semibold text-white">3,842</p>
-              </div>
-            </div>
+          </div>
+
+          <DemoChat />
+        </section>
+
+        {/* Arsitektur */}
+        <section className="space-y-8">
+          <div className="max-w-2xl">
+            <h2 className="text-3xl font-semibold tracking-tight">
+              Arsitektur yang rapi, bukan tumpukan if-else
+            </h2>
+            <p className="mt-3 text-muted-foreground">
+              Logika AI dipisah memakai pola desain standar industri, sehingga
+              menambah penyedia baru tidak menuntut perubahan pada logika
+              fallback.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {PATTERNS.map((pattern) => (
+              <Card key={pattern.title}>
+                <CardContent className="p-6">
+                  <span className="flex size-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                    <pattern.icon className="size-4" />
+                  </span>
+                  <h3 className="mt-4 font-semibold">{pattern.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {pattern.body}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </section>
 
-        <section id="features" className="grid gap-6 md:grid-cols-3">
-          {features.map((feature) => (
-            <article key={feature.title} className="rounded-3xl border border-white/10 bg-slate-900/70 p-8 transition hover:border-slate-600/50 hover:bg-slate-900">
-              <h3 className="text-xl font-semibold text-white">{feature.title}</h3>
-              <p className="mt-4 text-slate-400">{feature.description}</p>
-            </article>
-          ))}
-        </section>
+        {/* Contoh API */}
+        <section id="api" className="space-y-8 scroll-mt-24">
+          <div className="max-w-2xl">
+            <h2 className="text-3xl font-semibold tracking-tight">
+              Satu endpoint, semua penyedia
+            </h2>
+            <p className="mt-3 text-muted-foreground">
+              Generate API key di dashboard, lalu panggil endpoint yang sama
+              dari aplikasi Anda. Gateway yang memilihkan penyedianya.
+            </p>
+          </div>
 
-        <section className="rounded-[32px] border border-white/10 bg-slate-900/80 p-10 shadow-2xl shadow-slate-950/30 ring-1 ring-white/5">
-          <div className="flex items-start justify-between gap-6">
-            <div>
-              <p className="text-sm uppercase tracking-[0.24em] text-slate-400">Why Freeall AI</p>
-              <h2 className="mt-4 text-3xl font-semibold text-white sm:text-4xl">
-                Everything your team needs to run an AI-backed service.
-              </h2>
-            </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <CodeBlock title="Request" code={CURL_EXAMPLE} />
+            <CodeBlock title="Response" code={RESPONSE_EXAMPLE} />
           </div>
-          <div className="mt-10 grid gap-6 lg:grid-cols-3">
-            <div className="rounded-3xl bg-slate-950/70 p-6">
-              <p className="text-sm uppercase text-slate-500">Insight</p>
-              <p className="mt-4 text-base leading-7 text-slate-300">
-                Track the health and priority of every provider key in one place so you can route requests reliably.
+
+          <Card>
+            <CardContent className="flex flex-wrap items-center gap-4 p-6">
+              <ShieldCheck className="size-5 shrink-0 text-primary" />
+              <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+                Kunci penyedia dienkripsi AES-256-GCM sebelum disimpan, kunci
+                SaaS hanya disimpan sebagai hash, dan setiap API key punya kuota
+                harian sendiri.
               </p>
-            </div>
-            <div className="rounded-3xl bg-slate-950/70 p-6">
-              <p className="text-sm uppercase text-slate-500">Collaboration</p>
-              <p className="mt-4 text-base leading-7 text-slate-300">
-                Add, donate, and manage provider API keys for your team while preserving an elegant dashboard experience.
-              </p>
-            </div>
-            <div className="rounded-3xl bg-slate-950/70 p-6">
-              <p className="text-sm uppercase text-slate-500">Velocity</p>
-              <p className="mt-4 text-base leading-7 text-slate-300">
-                Ship faster with a polished UI designed to make AI operations intuitive from day one.
-              </p>
-            </div>
-          </div>
+              <Button asChild variant="outline" size="sm">
+                <Link href={user ? "/dashboard/api-keys" : "/register"}>
+                  {user ? "Kelola API key" : "Buat API key"}
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
         </section>
-      </div>
-    </main>
+      </main>
+
+      <footer className="border-t border-border">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:px-6 lg:px-8">
+          <p>FreeAll AI — Routing AI tanpa batas.</p>
+          <p>Open source, bisa di-self-host sepenuhnya.</p>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+function CodeBlock({ title, code }: { title: string; code: string }) {
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <p className="border-b border-border px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          {title}
+        </p>
+        <pre className="overflow-x-auto p-4 text-xs leading-relaxed scrollbar-thin">
+          <code className="font-mono">{code}</code>
+        </pre>
+      </CardContent>
+    </Card>
   );
 }
