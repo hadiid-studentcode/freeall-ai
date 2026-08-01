@@ -22,6 +22,10 @@ export function Select({
           "flex h-10 w-full appearance-none rounded-lg border border-input bg-background/40 px-3 py-2 pr-9 text-sm",
           "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 outline-none",
           "disabled:cursor-not-allowed disabled:opacity-50",
+          // Daftar pilihan digambar oleh sistem operasi, bukan CSS halaman.
+          // Tanpa warna eksplisit pada <option>, daftarnya muncul abu-abu
+          // dengan sorot biru/ungu bawaan OS dan terlihat asing di tema gelap.
+          "[&>option]:bg-popover [&>option]:text-popover-foreground",
           className,
         )}
         {...props}

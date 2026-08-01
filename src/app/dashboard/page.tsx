@@ -20,6 +20,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/guard";
+import { resolvePlan } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { formatNumber, formatRelative } from "@/lib/utils";
 
@@ -39,19 +40,24 @@ export default async function DashboardPage() {
     successToday,
     disabledProviders,
     recentProviders,
+    sharedPoolKeys,
+    account,
   ] = await Promise.all([
-    // Kolam kunci dipakai bersama semua user, jadi hitungan provider bersifat global.
-    prisma.providerKey.count({ where: { isActive: true } }),
-    prisma.providerKey.count(),
+    // Semua angka di halaman ini HANYA milik akun yang sedang login.
+    // Kunci provider adalah data pribadi: berapa yang dipunyai orang lain,
+    // penyedia apa, dan seberapa sering dipakai bukan urusan user lain.
+    // Angka lintas-akun hanya ada di /dashboard/admin.
+    prisma.providerKey.count({ where: { userId: user.id, isActive: true } }),
+    prisma.providerKey.count({ where: { userId: user.id } }),
     prisma.apiKey.count({ where: { userId: user.id, isActive: true } }),
     prisma.requestLog.count({
-      where: { apiKey: { userId: user.id }, createdAt: { gte: startOfDay } },
+      where: { createdAt: { gte: startOfDay }, apiKey: { userId: user.id } },
     }),
     prisma.requestLog.count({
       where: {
-        apiKey: { userId: user.id },
         createdAt: { gte: startOfDay },
         success: true,
+        apiKey: { userId: user.id },
       },
     }),
     prisma.providerKey.findMany({
@@ -74,7 +80,19 @@ export default async function DashboardPage() {
         lastUsedAt: true,
       },
     }),
+    // Hanya jumlahnya, tanpa detail apa pun. Ini bukan data pribadi orang
+    // lain melainkan kemampuan yang memang dimiliki akun ini: kalau kunci
+    // sendiri habis, request masih bisa dilayani Provider Publik.
+    prisma.providerKey.count({
+      where: { isActive: true, scope: "SHARED", userId: { not: user.id } },
+    }),
+    prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+      select: { plan: true, planExpiresAt: true },
+    }),
   ]);
+
+  const plan = resolvePlan(account);
 
   const successRate =
     requestsToday === 0
@@ -93,28 +111,57 @@ export default async function DashboardPage() {
             kondisi gateway Anda hari ini.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/dashboard/providers">
-            Tambah provider
-            <ArrowRight />
+        <div className="flex items-center gap-3">
+          <Link
+            href="/pricing"
+            className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:border-primary/40"
+            title="Lihat paket dan batasnya"
+          >
+            <span className="text-muted-foreground">Paket</span>
+            <Badge variant={plan.id === "FREE" ? "secondary" : "default"}>
+              {plan.label}
+            </Badge>
           </Link>
-        </Button>
+          <Button asChild>
+            <Link href="/dashboard/providers">
+              Tambah provider
+              <ArrowRight />
+            </Link>
+          </Button>
+        </div>
       </header>
 
       {totalProviders === 0 && (
-        <Alert variant="warning">
+        <Alert variant={sharedPoolKeys > 0 ? "default" : "warning"}>
           <TriangleAlert />
           <AlertDescription>
-            Belum ada ProviderKey di sistem, jadi endpoint{" "}
-            <code className="font-mono text-xs">/api/v1/chat</code> masih akan
-            membalas 503.{" "}
-            <Link
-              href="/dashboard/providers"
-              className="font-medium underline underline-offset-4"
-            >
-              Tambahkan minimal satu kunci provider
-            </Link>{" "}
-            untuk mengaktifkannya.
+            {sharedPoolKeys > 0 ? (
+              <>
+                Anda belum menambahkan kunci provider sendiri. Request tetap
+                dilayani {formatNumber(sharedPoolKeys)} kunci dari Provider Publik,
+                tetapi kuotanya dipakai bergantian dengan pengguna lain.{" "}
+                <Link
+                  href="/dashboard/providers"
+                  className="font-medium underline underline-offset-4"
+                >
+                  Tambahkan kunci sendiri
+                </Link>{" "}
+                agar kuotanya jadi milik Anda sepenuhnya.
+              </>
+            ) : (
+              <>
+                Belum ada kunci provider yang bisa dipakai akun ini, jadi{" "}
+                <code className="font-mono text-xs">/api/v1/chat</code> masih
+                akan membalas 503.{" "}
+                <Link
+                  href="/dashboard/providers"
+                  className="font-medium underline underline-offset-4"
+                >
+                  Tambahkan minimal satu kunci provider
+                </Link>{" "}
+                untuk mengaktifkannya.
+              </>
+            )}
           </AlertDescription>
         </Alert>
       )}
@@ -122,9 +169,13 @@ export default async function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={<Server className="size-4" />}
-          label="Provider aktif"
+          label="Kunci provider Anda"
           value={formatNumber(activeProviders)}
-          hint={`dari ${formatNumber(totalProviders)} kunci terdaftar`}
+          hint={
+            sharedPoolKeys > 0
+              ? `aktif dari ${formatNumber(totalProviders)} · +${formatNumber(sharedPoolKeys)} dari Provider Publik`
+              : `aktif dari ${formatNumber(totalProviders)} kunci Anda`
+          }
         />
         <StatCard
           icon={<KeyRound className="size-4" />}

@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { LogOut, Zap } from "lucide-react";
 
 import { DashboardNav } from "@/app/dashboard/nav";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/lib/auth/actions";
 import { requireUser } from "@/lib/auth/guard";
@@ -31,6 +33,8 @@ export default async function DashboardLayout({
             <span className="hidden text-sm text-muted-foreground sm:inline">
               {user.name ?? user.email}
             </span>
+            {user.role === "ADMIN" && <Badge variant="default">Admin</Badge>}
+            <ThemeToggle />
             <form action={logoutAction}>
               <Button type="submit" variant="ghost" size="sm">
                 <LogOut />
@@ -40,7 +44,7 @@ export default async function DashboardLayout({
           </div>
         </div>
 
-        <DashboardNav />
+        <DashboardNav isAdmin={user.role === "ADMIN"} />
       </header>
 
       <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">

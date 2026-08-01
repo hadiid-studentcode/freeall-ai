@@ -7,7 +7,11 @@ import {
 } from "@/lib/ai/ai-manager";
 import { authenticateRequest } from "@/lib/api/authenticate";
 import { parseChatPayload } from "@/lib/api/chat-payload";
-import { checkBurstLimit, checkDailyQuota } from "@/lib/rate-limit";
+import {
+  checkBurstLimit,
+  checkDailyQuota,
+  checkPublicPoolQuota,
+} from "@/lib/rate-limit";
 
 // Butuh node:crypto (dekripsi kunci) dan driver pg, jadi bukan edge runtime.
 export const runtime = "nodejs";
@@ -28,8 +32,8 @@ export async function POST(request: Request) {
     );
   }
 
-  // 2. Fase 4 — rate limiting
-  const burst = checkBurstLimit(auth.apiKey.id);
+  // 2. Fase 4 — rate limiting. Batas lonjakan mengikuti paket pemilik kunci.
+  const burst = checkBurstLimit(auth.apiKey.id, auth.apiKey.burstPerMinute);
   if (!burst.allowed) {
     return rateLimited(burst.reason, burst.retryAfterSeconds);
   }
@@ -37,6 +41,14 @@ export async function POST(request: Request) {
   const quota = await checkDailyQuota(auth.apiKey.id, auth.apiKey.dailyLimit);
   if (!quota.allowed) {
     return rateLimited(quota.reason, quota.retryAfterSeconds);
+  }
+
+  // Pagar tambahan yang ditentukan admin: berlaku hanya untuk user yang belum
+  // membawa kunci provider sendiri, agar kunci publik tidak dihabiskan satu
+  // orang. User yang punya kunci sendiri tidak tersentuh aturan ini.
+  const publicQuota = await checkPublicPoolQuota(auth.apiKey.userId);
+  if (!publicQuota.allowed) {
+    return rateLimited(publicQuota.reason, publicQuota.retryAfterSeconds);
   }
 
   // 3. Validasi body
@@ -61,6 +73,9 @@ export async function POST(request: Request) {
     const result = await AiManager.processChat({
       ...parsed.payload,
       apiKeyId: auth.apiKey.id,
+      // Menentukan kunci provider mana yang boleh dipakai: milik user ini
+      // lebih dulu, baru Provider Publik.
+      userId: auth.apiKey.userId,
       source: "api",
     });
 

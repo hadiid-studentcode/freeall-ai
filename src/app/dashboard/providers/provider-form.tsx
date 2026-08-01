@@ -18,11 +18,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { PROVIDER_PRESETS } from "@/lib/ai/providers";
+import type { ProviderPreset } from "@/lib/ai/providers";
 
 const AUTO = "auto";
 
-export function ProviderForm() {
+export function ProviderForm({
+  isAdmin,
+  presets,
+}: {
+  isAdmin: boolean;
+  presets: ProviderPreset[];
+}) {
   const [state, formAction] = useActionState<ActionState, FormData>(
     createProviderKeyAction,
     {},
@@ -30,7 +36,7 @@ export function ProviderForm() {
   const [providerId, setProviderId] = useState(AUTO);
   const fieldId = useId();
 
-  const preset = PROVIDER_PRESETS.find((item) => item.id === providerId);
+  const preset = presets.find((item) => item.id === providerId);
   const isAuto = providerId === AUTO;
   const isCustom = providerId === "custom";
 
@@ -91,7 +97,7 @@ export function ProviderForm() {
                 onChange={(event) => setProviderId(event.target.value)}
               >
                 <option value={AUTO}>✨ Deteksi otomatis (disarankan)</option>
-                {PROVIDER_PRESETS.map((item) => (
+                {presets.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.label}
                     {item.free ? " — ada tier gratis" : ""}
@@ -156,6 +162,25 @@ export function ProviderForm() {
                 </p>
               </div>
             </div>
+          )}
+
+          {isAdmin && (
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-background/40 p-3">
+              <input
+                type="checkbox"
+                name="scope"
+                value="SHARED"
+                defaultChecked
+                className="mt-0.5 size-4 accent-[var(--primary)]"
+              />
+              <span className="text-sm">
+                <span className="font-medium">Bagikan ke Provider Publik</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Kunci dipakai semua pengguna terdaftar dan demo halaman depan.
+                  Kalau tidak dicentang, kunci ini hanya untuk akun Anda sendiri.
+                </span>
+              </span>
+            </label>
           )}
 
           {state.error && (

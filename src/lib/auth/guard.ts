@@ -14,3 +14,15 @@ export async function requireUser(): Promise<SessionUser> {
   if (!user) redirect("/login");
   return user;
 }
+
+/**
+ * Wajibkan peran ADMIN.
+ *
+ * Dialihkan ke dashboard biasa, bukan halaman error, supaya keberadaan
+ * halaman admin tidak terungkap ke akun yang tidak berhak.
+ */
+export async function requireAdmin(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (user.role !== "ADMIN") redirect("/dashboard");
+  return user;
+}

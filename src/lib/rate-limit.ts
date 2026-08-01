@@ -1,4 +1,7 @@
+import { isProduction } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import { resolvePlan } from "@/lib/plans";
+import { getPublicDailyLimit } from "@/lib/settings";
 
 /**
  * Fase 4 — pembatasan pemakaian.
@@ -53,6 +56,72 @@ export async function checkDailyQuota(
   return { allowed: true, remaining: dailyLimit - used };
 }
 
+/**
+ * Kuota harian untuk pengguna yang mengandalkan Provider Publik.
+ *
+ * Hanya berlaku bila user belum punya kunci provider aktif miliknya sendiri.
+ * Begitu ia menambahkan kunci sendiri, pagar ini lepas — kuota yang terpakai
+ * adalah kuotanya sendiri, bukan milik admin.
+ *
+ * Berbeda dari `ApiKey.dailyLimit` yang diatur user sendiri, batas ini
+ * ditentukan admin dan tidak bisa dinaikkan dari sisi pengguna.
+ */
+export async function checkPublicPoolQuota(
+  userId: string,
+): Promise<RateLimitResult> {
+  const [ownActiveKeys, user] = await Promise.all([
+    prisma.providerKey.count({ where: { userId, isActive: true } }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { plan: true, planExpiresAt: true },
+    }),
+  ]);
+
+  // Punya kunci sendiri → tidak memakai jatah publik.
+  if (ownActiveKeys > 0) return { allowed: true, remaining: Infinity };
+
+  // Batas paket dan batas global admin dua-duanya berlaku; yang lebih kecil
+  // menang. Admin tetap bisa menurunkan jatah semua orang saat kunci publik
+  // menipis, tanpa harus menyentuh paket satu per satu.
+  const adminLimit = await getPublicDailyLimit();
+  const planLimit = user ? resolvePlan(user).publicDailyLimit : 0;
+  const limit = Math.min(adminLimit, planLimit);
+
+  if (limit === 0) {
+    return {
+      allowed: false,
+      remaining: 0,
+      reason:
+        "Admin menutup pemakaian Provider Publik. Tambahkan kunci provider " +
+        "Anda sendiri di dashboard untuk mulai memakai gateway.",
+    };
+  }
+
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const used = await prisma.requestLog.count({
+    where: { apiKey: { userId }, createdAt: { gte: startOfDay } },
+  });
+
+  if (used >= limit) {
+    const nextMidnight = new Date(startOfDay);
+    nextMidnight.setDate(nextMidnight.getDate() + 1);
+
+    return {
+      allowed: false,
+      remaining: 0,
+      retryAfterSeconds: Math.ceil((nextMidnight.getTime() - Date.now()) / 1000),
+      reason:
+        `Kuota harian Provider Publik (${limit} request) sudah habis. ` +
+        `Tambahkan kunci provider Anda sendiri di dashboard untuk pemakaian ` +
+        `tanpa batas ini, atau tunggu sampai tengah malam.`,
+    };
+  }
+
+  return { allowed: true, remaining: limit - used };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Burst limiter di memori                                                    */
 /* -------------------------------------------------------------------------- */
@@ -76,6 +145,8 @@ function consume(
   key: string,
   limit: number,
   windowMs: number,
+  /** false = hanya mengintip sisa jatah, tanpa memakainya. */
+  commit = true,
 ): RateLimitResult {
   const now = Date.now();
   sweep(now);
@@ -83,8 +154,8 @@ function consume(
   const state = windows.get(key);
 
   if (!state || state.resetAt <= now) {
-    windows.set(key, { count: 1, resetAt: now + windowMs });
-    return { allowed: true, remaining: limit - 1 };
+    if (commit) windows.set(key, { count: 1, resetAt: now + windowMs });
+    return { allowed: true, remaining: limit - (commit ? 1 : 0) };
   }
 
   if (state.count >= limit) {
@@ -96,19 +167,55 @@ function consume(
     };
   }
 
-  state.count += 1;
+  if (commit) state.count += 1;
   return { allowed: true, remaining: limit - state.count };
 }
 
-/** Lonjakan per API key: 30 request per menit. */
-export function checkBurstLimit(apiKeyId: string): RateLimitResult {
-  return consume(`key:${apiKeyId}`, 30, 60_000);
+/**
+ * Lonjakan per API key. Batasnya mengikuti paket langganan pemiliknya —
+ * paket berbayar mendapat jendela yang lebih longgar.
+ */
+export function checkBurstLimit(
+  apiKeyId: string,
+  perMinute: number,
+): RateLimitResult {
+  return consume(`key:${apiKeyId}`, perMinute, 60_000);
 }
 
-/** Endpoint demo tidak butuh API key, jadi dibatasi per IP: 8 request per jam. */
-export function checkIpRateLimit(ip: string): RateLimitResult {
-  return consume(`ip:${ip}`, 8, 60 * 60_000);
+/**
+ * Demo landing page: tanpa API key, dibatasi per IP.
+ *
+ * Batas ini menjaga instance publik agar kunci provider tidak dihabiskan
+ * pengunjung. Pada instance self-hosted yang dipakai pemiliknya sendiri
+ * batas itu justru mengganggu, jadi:
+ * - di mode pengembangan batas dimatikan sepenuhnya;
+ * - di produksi bisa diatur lewat `DEMO_RATE_LIMIT` (0 = tanpa batas).
+ */
+const DEMO_LIMIT = Number(process.env.DEMO_RATE_LIMIT ?? 20);
+const DEMO_WINDOW_MS = 60 * 60_000;
+const DEMO_LIMIT_ENABLED =
+  isProduction && Number.isFinite(DEMO_LIMIT) && DEMO_LIMIT > 0;
+
+const UNLIMITED: RateLimitResult = { allowed: true, remaining: Infinity };
+
+/**
+ * Cek jatah demo TANPA memakainya.
+ *
+ * Pemakaian baru dicatat lewat `consumeIpRateLimit` setelah jawaban benar-benar
+ * diterima — supaya kegagalan di sisi provider tidak ikut menghabiskan jatah
+ * pengunjung, yang dulu membuat demo terasa "habis" padahal belum dipakai.
+ */
+export function peekIpRateLimit(ip: string): RateLimitResult {
+  if (!DEMO_LIMIT_ENABLED) return UNLIMITED;
+  return consume(`ip:${ip}`, DEMO_LIMIT, DEMO_WINDOW_MS, false);
 }
+
+export function consumeIpRateLimit(ip: string): RateLimitResult {
+  if (!DEMO_LIMIT_ENABLED) return UNLIMITED;
+  return consume(`ip:${ip}`, DEMO_LIMIT, DEMO_WINDOW_MS, true);
+}
+
+export const demoLimitPerHour = DEMO_LIMIT_ENABLED ? DEMO_LIMIT : null;
 
 /** Ambil IP klien dari header proxy yang lazim dipakai. */
 export function getClientIp(request: Request): string {

@@ -1,10 +1,12 @@
-import { Power, Trash2 } from "lucide-react";
+import { Power, RefreshCw, Trash2 } from "lucide-react";
 
 import {
   deleteProviderKeyAction,
+  refreshProviderModelsAction,
   toggleProviderKeyAction,
   updateProviderPriorityAction,
 } from "@/app/dashboard/actions";
+import { toggleKeyScopeAction } from "@/app/dashboard/admin/actions";
 import { ProviderForm } from "@/app/dashboard/providers/provider-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { getProviderCatalog } from "@/lib/ai/catalog";
 import { requireUser } from "@/lib/auth/guard";
 import { prisma } from "@/lib/prisma";
 import { formatNumber, formatRelative } from "@/lib/utils";
@@ -33,6 +36,8 @@ export const metadata = { title: "Provider AI · FreeAll AI" };
 export default async function ProvidersPage() {
   const user = await requireUser();
 
+  const catalog = await getProviderCatalog();
+
   const providerKeys = await prisma.providerKey.findMany({
     where: { userId: user.id },
     orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
@@ -41,6 +46,8 @@ export default async function ProvidersPage() {
       providerName: true,
       keyPreview: true,
       modelName: true,
+      fallbackModels: true,
+      scope: true,
       isActive: true,
       priority: true,
       successCount: true,
@@ -58,13 +65,13 @@ export default async function ProvidersPage() {
           Provider AI
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Kunci yang Anda daftarkan masuk ke kolam fallback bersama. Saat satu
+          Kunci yang Anda daftarkan masuk ke kolam Provider Publik. Saat satu
           kunci kena limit (429), gateway otomatis meneruskan permintaan ke
           kunci berikutnya sesuai prioritas.
         </p>
       </header>
 
-      <ProviderForm />
+      <ProviderForm isAdmin={user.role === "ADMIN"} presets={catalog} />
 
       <Card>
         <CardHeader>
@@ -110,6 +117,14 @@ export default async function ProvidersPage() {
                       <p className="truncate font-mono text-xs">
                         {providerKey.modelName ?? "—"}
                       </p>
+                      {providerKey.fallbackModels.length > 0 && (
+                        <p
+                          className="mt-1 text-xs text-muted-foreground"
+                          title={providerKey.fallbackModels.join("\n")}
+                        >
+                          +{providerKey.fallbackModels.length} model cadangan
+                        </p>
+                      )}
                     </TableCell>
 
                     <TableCell>
@@ -120,6 +135,41 @@ export default async function ProvidersPage() {
                       >
                         {providerKey.isActive ? "Aktif" : "Nonaktif"}
                       </Badge>
+                      <Badge
+                        variant={
+                          providerKey.scope === "SHARED" ? "default" : "outline"
+                        }
+                        className="mt-1 block w-fit"
+                        title={
+                          providerKey.scope === "SHARED"
+                            ? "Publik — dipakai semua pengguna dan demo halaman depan"
+                            : "Hanya dipakai akun Anda"
+                        }
+                      >
+                        {providerKey.scope === "SHARED" ? "Publik" : "Pribadi"}
+                      </Badge>
+                      {/* Admin bisa memindahkan kunci yang SUDAH terdaftar
+                          masuk atau keluar dari Provider Publik, tanpa perlu
+                          menghapus lalu mendaftarkannya ulang. */}
+                      {user.role === "ADMIN" && (
+                        <form action={toggleKeyScopeAction} className="mt-1">
+                          <input
+                            type="hidden"
+                            name="id"
+                            value={providerKey.id}
+                          />
+                          <Button
+                            type="submit"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-1.5 text-xs"
+                          >
+                            {providerKey.scope === "SHARED"
+                              ? "Jadikan pribadi"
+                              : "Jadikan publik"}
+                          </Button>
+                        </form>
+                      )}
                       {!providerKey.isActive && providerKey.disabledReason && (
                         <p className="mt-1 max-w-[12rem] text-xs text-muted-foreground">
                           {providerKey.disabledReason}
@@ -173,6 +223,22 @@ export default async function ProvidersPage() {
 
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
+                        <form action={refreshProviderModelsAction}>
+                          <input
+                            type="hidden"
+                            name="id"
+                            value={providerKey.id}
+                          />
+                          <Button
+                            type="submit"
+                            variant="ghost"
+                            size="icon"
+                            title="Segarkan daftar model dari penyedia"
+                          >
+                            <RefreshCw />
+                          </Button>
+                        </form>
+
                         <form action={toggleProviderKeyAction}>
                           <input
                             type="hidden"

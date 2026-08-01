@@ -93,6 +93,19 @@
     border-color: var(--border);
   }
 
+  /*
+   * Widget yang digambar sistem operasi — daftar <option>, scrollbar,
+   * pemilih tanggal — tidak mengikuti CSS halaman. Tanpa petunjuk ini
+   * semuanya muncul dengan tema terang bawaan OS dan terlihat asing.
+   */
+  :root {
+    color-scheme: light;
+  }
+
+  .dark {
+    color-scheme: dark;
+  }
+
   body {
     background-color: var(--background);
     color: var(--foreground);

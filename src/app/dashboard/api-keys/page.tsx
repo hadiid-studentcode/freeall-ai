@@ -3,10 +3,12 @@ import { Power, Trash2 } from "lucide-react";
 import {
   deleteApiKeyAction,
   toggleApiKeyAction,
+  updateApiKeyLimitAction,
 } from "@/app/dashboard/actions";
 import { ApiKeyForm } from "@/app/dashboard/api-keys/api-key-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -59,7 +61,10 @@ export default async function ApiKeysPage() {
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           Kunci otorisasi untuk memakai gateway FreeAll AI dari aplikasi Anda
-          sendiri.
+          sendiri. <strong>Kuota harian</strong> adalah rem pemakaian: begitu
+          jumlah request hari ini menyentuh angka itu, endpoint membalas 429
+          sampai tengah malam — berguna agar satu aplikasi tidak menghabiskan
+          seluruh kunci provider. Bisa diubah kapan saja.
         </p>
       </header>
 
@@ -116,18 +121,45 @@ export default async function ApiKeysPage() {
                         </Badge>
                       </TableCell>
 
-                      <TableCell className="whitespace-nowrap text-xs">
-                        <span
-                          className={
-                            nearLimit ? "text-warning" : "text-foreground"
-                          }
-                        >
-                          {formatNumber(used)}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {" "}
-                          / {formatNumber(apiKey.dailyLimit)}
-                        </span>
+                      <TableCell className="whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-xs ${nearLimit ? "text-warning" : "text-foreground"}`}
+                          >
+                            {formatNumber(used)}
+                          </span>
+                          {/* Kuota bisa diubah kapan saja — kebutuhan tiap
+                              aplikasi berubah setelah kunci dibuat. */}
+                          <form
+                            action={updateApiKeyLimitAction}
+                            className="flex items-center gap-1"
+                          >
+                            <input type="hidden" name="id" value={apiKey.id} />
+                            <span className="text-xs text-muted-foreground">
+                              /
+                            </span>
+                            <Input
+                              name="dailyLimit"
+                              type="number"
+                              min={1}
+                              max={100000}
+                              defaultValue={apiKey.dailyLimit}
+                              className="h-7 w-20 px-2 text-xs"
+                              aria-label={`Kuota harian ${apiKey.name}`}
+                            />
+                            <Button type="submit" variant="ghost" size="sm">
+                              Simpan
+                            </Button>
+                          </form>
+                        </div>
+                        <div className="mt-1 h-1 w-full max-w-40 overflow-hidden rounded-full bg-secondary">
+                          <div
+                            className={`h-full ${nearLimit ? "bg-warning" : "bg-primary"}`}
+                            style={{
+                              width: `${Math.min((used / apiKey.dailyLimit) * 100, 100)}%`,
+                            }}
+                          />
+                        </div>
                       </TableCell>
 
                       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">

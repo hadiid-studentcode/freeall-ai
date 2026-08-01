@@ -15,8 +15,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       <div className="w-full max-w-sm">{children}</div>
 
       <p className="mt-8 max-w-sm text-center text-xs text-muted-foreground">
-        Routing AI tanpa batas — API Gateway open-source dengan sistem fallback
-        cerdas.
+        Routing AI tanpa batas — API Gateway dengan sistem fallback cerdas.
       </p>
     </div>
   );

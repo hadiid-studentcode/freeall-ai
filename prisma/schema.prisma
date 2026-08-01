@@ -20,6 +20,59 @@ enum Role {
   ADMIN
 }
 
+/// Paket langganan. Menentukan batas-batas yang tidak bisa dinaikkan sendiri
+/// oleh pengguna: jumlah API key, kuota Provider Publik, lama riwayat, dan
+/// batas lonjakan per menit.
+enum Plan {
+  FREE
+  PRO
+  TEAM
+}
+
+/// Siapa yang boleh memakai sebuah ProviderKey.
+///
+/// Sengaja disimpan eksplisit, bukan diturunkan dari peran pemiliknya:
+/// admin kadang perlu menyimpan kunci pribadi yang tidak dibagikan, user
+/// biasa kadang ingin menyumbangkan kuncinya ke kolam bersama, dan
+/// perubahan peran seseorang tidak boleh diam-diam mengubah akses kunci.
+enum KeyScope {
+  /// Hanya pemiliknya yang memakai kunci ini.
+  PRIVATE
+  /// Provider publik — dipakai semua user dan demo halaman depan.
+  SHARED
+}
+
+/// Penyedia AI tambahan yang didaftarkan admin lewat dashboard.
+///
+/// Preset bawaan tetap hidup di kode karena membawa pola pengenalan kunci
+/// (regex) yang dipakai deteksi otomatis. Tabel ini melengkapinya: penyedia
+/// baru bisa ditambahkan tanpa deploy ulang, dan langsung muncul di halaman
+/// depan maupun formulir pendaftaran kunci.
+model CustomProvider {
+  id           String   @id @default(uuid())
+  /// Dipakai sebagai ProviderKey.providerName; huruf kecil tanpa spasi.
+  slug         String   @unique
+  label        String
+  baseUrl      String
+  defaultModel String
+  /// "openai" | "gemini" | "anthropic"
+  format       String   @default("openai")
+  consoleUrl   String?
+  free         Boolean  @default(false)
+  note         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+/// Pengaturan aplikasi yang bisa diubah admin tanpa deploy ulang.
+/// Disimpan sebagai pasangan kunci-nilai agar menambah pengaturan baru
+/// tidak menuntut migrasi kolom setiap kali.
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
 /// Pengguna web / pelanggan SaaS.
 model User {
   id           String        @id @default(uuid())
@@ -27,6 +80,11 @@ model User {
   name         String?
   passwordHash String
   role         Role          @default(USER)
+  plan         Plan          @default(FREE)
+  /// Kapan paket berbayar berakhir. Null berarti tanpa masa berlaku
+  /// (paket gratis, atau langganan seumur hidup yang diberikan admin).
+  /// Lewat tanggal ini, akun otomatis dianggap kembali ke FREE.
+  planExpiresAt DateTime?
   apiKeys      ApiKey[] // Kunci SaaS yang dibuat user untuk memakai gateway ini
   providerKeys ProviderKey[] // Kunci AI (Groq/Gemini/dll) yang disumbangkan user
   sessions     Session[]
@@ -73,11 +131,16 @@ model ProviderKey {
   keyCiphertext  String
   keyHash        String    @unique
   keyPreview     String // "gsk_abc…9f2c"
-  format         String    @default("openai") // "openai" | "gemini"
+  format         String    @default("openai") // "openai" | "gemini" | "anthropic"
   baseUrl        String? // Override endpoint; kosong = pakai preset provider
-  modelName      String? // Override model; kosong = pakai default preset
-  userId         String? // Null jika ditambahkan Admin
+  modelName      String? // Model utama; kosong = pakai default preset
+  /// Model cadangan pada kunci yang SAMA. Kuota gratis umumnya dihitung
+  /// per model, jadi saat model utama kena 429 sering kali model lain di
+  /// akun yang sama masih punya sisa jatah.
+  fallbackModels String[]  @default([])
+  userId         String? // Pemilik kunci; null hanya untuk kunci sistem
   user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scope          KeyScope  @default(PRIVATE)
   isActive       Boolean   @default(true)
   priority       Int       @default(0) // Makin tinggi, makin awal dicoba
   errorCount     Int       @default(0)
@@ -91,6 +154,7 @@ model ProviderKey {
 
   @@index([isActive, priority])
   @@index([userId])
+  @@index([scope, isActive])
 }
 
 /// Riwayat eksekusi. Dipakai untuk statistik dashboard dan penghitungan kuota harian.

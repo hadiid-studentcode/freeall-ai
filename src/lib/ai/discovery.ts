@@ -212,6 +212,20 @@ export function pickBestModel(
   models: string[],
   format: ProviderFormat,
 ): string | null {
+  return rankModels(models, format)[0] ?? null;
+}
+
+/**
+ * Urutkan model chat dari yang paling layak dipakai.
+ *
+ * Hasil pertama dipakai sebagai model utama, sisanya disimpan sebagai model
+ * cadangan pada kunci yang sama — berguna karena kuota gratis umumnya
+ * dihitung per model, bukan per akun.
+ */
+export function rankModels(
+  models: string[],
+  format: ProviderFormat,
+): string[] {
   const candidates = models.filter((id) => {
     const lower = id.toLowerCase();
     if (NON_CHAT.some((pattern) => lower.includes(pattern))) return false;
@@ -219,7 +233,7 @@ export function pickBestModel(
     return true;
   });
 
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) return [];
 
   const score = (id: string): number => {
     const lower = id.toLowerCase();
@@ -245,5 +259,8 @@ export function pickBestModel(
     return value;
   };
 
-  return candidates.sort((a, b) => score(b) - score(a))[0];
+  return [...candidates].sort((a, b) => score(b) - score(a));
 }
+
+/** Berapa banyak model cadangan yang disimpan per kunci. */
+export const MAX_FALLBACK_MODELS = 4;

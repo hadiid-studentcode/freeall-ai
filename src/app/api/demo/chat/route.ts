@@ -6,7 +6,12 @@ import {
   NoProviderAvailableError,
 } from "@/lib/ai/ai-manager";
 import { parseChatPayload } from "@/lib/api/chat-payload";
-import { checkIpRateLimit, getClientIp } from "@/lib/rate-limit";
+import {
+  consumeIpRateLimit,
+  demoLimitPerHour,
+  getClientIp,
+  peekIpRateLimit,
+} from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -18,14 +23,18 @@ export const runtime = "nodejs";
  */
 export async function POST(request: Request) {
   const ip = getClientIp(request);
-  const limit = checkIpRateLimit(ip);
+  const limit = peekIpRateLimit(ip);
 
   if (!limit.allowed) {
+    const minutes = Math.ceil((limit.retryAfterSeconds ?? 0) / 60);
     return NextResponse.json(
       {
         success: false,
         error:
-          "Batas demo tercapai. Daftar gratis untuk mendapat API key dengan kuota harian penuh.",
+          `Kuota demo habis — ini batas dari gateway ini sendiri (bukan dari penyedia AI), ` +
+          `${demoLimitPerHour} percakapan per jam per pengunjung, untuk menjaga kunci provider ` +
+          `tidak terkuras. Coba lagi dalam ${minutes} menit, atau daftar gratis untuk ` +
+          `mendapat API key dengan kuota harian sendiri.`,
       },
       {
         status: 429,
@@ -57,8 +66,14 @@ export async function POST(request: Request) {
       messages: parsed.payload.messages.slice(-4),
       maxTokens: 512,
       apiKeyId: null,
+      // Tanpa pemilik: demo hanya boleh memakai kunci di Provider Publik,
+      // tidak pernah menyentuh kunci pribadi milik user.
+      userId: null,
       source: "demo",
     });
+
+    // Jatah baru dipotong setelah jawaban benar-benar didapat.
+    const spent = consumeIpRateLimit(ip);
 
     return NextResponse.json({
       success: true,
@@ -67,7 +82,7 @@ export async function POST(request: Request) {
       model: result.model,
       attempts: result.attempts,
       latencyMs: result.latencyMs,
-      remaining: limit.remaining,
+      remaining: spent.remaining,
     });
   } catch (error) {
     if (

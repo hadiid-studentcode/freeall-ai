@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { requireUser } from "@/lib/auth/guard";
+import { resolvePlan } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime, formatNumber } from "@/lib/utils";
 
@@ -25,9 +26,32 @@ const PAGE_SIZE = 50;
 export default async function LogsPage() {
   const user = await requireUser();
 
-  // Hanya log milik API key user ini — log demo (apiKeyId null) tidak ikut.
+  // Log milik API key user ini saja.
+  //
+  // Trafik demo halaman depan tidak dimiliki siapa pun, dan menampilkannya ke
+  // setiap user berarti membocorkan aktivitas pengunjung lain. Karena demo
+  // ditenagai Provider Publik yang dikelola admin, log itu hanya ikut tampil
+  // untuk admin — yang memang bertanggung jawab atasnya.
+  const isAdmin = user.role === "ADMIN";
+
+  const account = await prisma.user.findUniqueOrThrow({
+    where: { id: user.id },
+    select: { plan: true, planExpiresAt: true },
+  });
+  const plan = resolvePlan(account);
+
+  // Lama riwayat yang bisa dilihat mengikuti paket. Datanya tetap tersimpan;
+  // yang dibatasi hanya jangkauan tampilan.
+  const since = new Date();
+  since.setDate(since.getDate() - plan.logRetentionDays);
+
   const logs = await prisma.requestLog.findMany({
-    where: { apiKey: { userId: user.id } },
+    where: {
+      createdAt: { gte: since },
+      ...(isAdmin
+        ? { OR: [{ apiKey: { userId: user.id } }, { source: "demo" }] }
+        : { apiKey: { userId: user.id } }),
+    },
     orderBy: { createdAt: "desc" },
     take: PAGE_SIZE,
     select: {
@@ -39,6 +63,7 @@ export default async function LogsPage() {
       attempts: true,
       latencyMs: true,
       errorMessage: true,
+      source: true,
       createdAt: true,
       apiKey: { select: { name: true } },
     },
@@ -51,9 +76,14 @@ export default async function LogsPage() {
           Riwayat request
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Kolom <strong>Percobaan</strong> menunjukkan berapa kunci provider yang
-          dilalui sebelum request selesai — angka di atas 1 berarti fallback
-          bekerja.
+          Kolom <strong>Percobaan</strong> menunjukkan berapa kombinasi kunci dan
+          model yang dilalui sebelum request selesai — angka di atas 1 berarti
+          fallback bekerja.{" "}
+          {isAdmin
+            ? "Sebagai admin, percakapan lewat demo halaman depan ikut tampil dengan tanda Demo."
+            : "Hanya request lewat API key Anda yang tampil di sini."}{" "}
+          Paket <strong>{plan.label}</strong> menampilkan riwayat{" "}
+          {plan.logRetentionDays} hari terakhir.
         </p>
       </header>
 
@@ -84,7 +114,7 @@ export default async function LogsPage() {
                   <TableHead>Model</TableHead>
                   <TableHead>Percobaan</TableHead>
                   <TableHead>Latensi</TableHead>
-                  <TableHead>API key</TableHead>
+                  <TableHead>Sumber</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -134,8 +164,14 @@ export default async function LogsPage() {
                         : `${formatNumber(log.latencyMs)} ms`}
                     </TableCell>
 
-                    <TableCell className="text-xs text-muted-foreground">
-                      {log.apiKey?.name ?? "—"}
+                    <TableCell className="text-xs">
+                      {log.source === "demo" ? (
+                        <Badge variant="outline">Demo</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          {log.apiKey?.name ?? "API"}
+                        </span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

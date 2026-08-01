@@ -13,7 +13,8 @@ Konsepnya **Crowdsourced BYOK** (Bring Your Own Key): pengguna mendaftarkan API 
 | | |
 |---|---|
 | **Tempel key, selesai** | Sistem mengenali penyedianya dari kuncinya, menanyakan model apa yang masih hidup, memilih yang terbaik, lalu mengujinya — tanpa Anda mengisi Base URL atau nama model. |
-| **Fallback otomatis** | 429 → catat lalu lanjut ke kunci berikutnya. 401/403 → kunci dimatikan otomatis. |
+| **Fallback dua lapis** | Model utama kena limit → coba **model lain pada kunci yang sama** (kuota gratis dihitung per model). Semua model kunci itu habis → pindah ke kunci berikutnya. |
+| **Menyembuhkan diri** | Model cadangan yang berhasil otomatis naik jadi model utama, jadi request berikutnya tidak lagi membuang percobaan ke model yang sedang habis. |
 | **Multi-provider** | 13 preset (Groq, Gemini, **Claude**, OpenRouter, Cerebras, NVIDIA, xAI, Fireworks, OpenAI, DeepSeek, Mistral, Together, SambaNova) + endpoint kustom apa pun yang OpenAI-compatible. |
 | **Enkripsi kunci** | API key penyedia dienkripsi AES-256-GCM sebelum masuk database. |
 | **Kunci SaaS** | `sk-freeall-…` per aplikasi, disimpan sebagai hash — tidak bisa dibaca ulang. |
@@ -175,9 +176,20 @@ Menambah penyedia berformat OpenAI cukup dengan menambahkan satu entri di `provi
 
 1. `route.ts` memverifikasi kunci SaaS, lalu mengecek kuota harian dan burst limit
 2. `AiManager` mengambil ProviderKey aktif, urut `priority desc, errorCount asc`
-3. Untuk tiap kunci: `AiFactory.create()` → `strategy.chat()`
-4. **429** → `errorCount++`, lanjut · **401/403** → kunci dimatikan, lanjut · **sukses** → loop berhenti
-5. Hasil dan jumlah percobaan dicatat ke `RequestLog`
+3. Untuk tiap kunci, untuk tiap model (`modelName` lalu `fallbackModels`): `AiFactory.create()` → `strategy.chat()`
+4. **429 / 404** → model itu saja yang bermasalah, coba model berikutnya pada kunci yang sama
+5. **401/403** → kunci ditolak permanen, dimatikan dan seluruh modelnya dilewati
+6. **Sukses** → loop berhenti; bila yang berhasil adalah model cadangan, model itu dinaikkan jadi utama
+7. Hasil dan jumlah percobaan dicatat ke `RequestLog`
+
+Dibatasi `MAX_KEYS` (6 kunci) dan `MAX_ATTEMPTS` (10 percobaan kunci × model) agar latensi tetap terkendali.
+
+### Kenapa fallback per model penting
+
+Penyedia gratis menghitung kuota **per model**, bukan per akun. Gemini yang membalas
+`429 … Quota exceeded for … model: gemini-2.0-flash` masih punya jatah di
+`gemini-flash-lite-latest` dengan kunci yang sama. Tanpa lapis ini, satu kunci
+yang kehabisan kuota akan langsung dianggap mati padahal belum.
 
 Tidak ada kode fallback yang perlu diubah saat menambah penyedia.
 

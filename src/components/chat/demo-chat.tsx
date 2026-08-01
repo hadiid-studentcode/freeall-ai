@@ -18,7 +18,17 @@ export function DemoChat() {
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [remaining, setRemaining] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  function scrollToBottom() {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    });
+  }
 
   async function send(event: React.FormEvent) {
     event.preventDefault();
@@ -31,6 +41,9 @@ export function DemoChat() {
     setInput("");
     setError(null);
     setPending(true);
+    // Turunkan segera agar pertanyaan yang baru dikirim langsung terlihat,
+    // tidak menunggu jawaban datang.
+    scrollToBottom();
 
     try {
       const response = await fetch("/api/demo/chat", {
@@ -43,8 +56,11 @@ export function DemoChat() {
 
       const data = await response.json();
 
+      if (typeof data.remaining === "number") setRemaining(data.remaining);
+
       if (!response.ok || !data.success) {
         setError(data.error ?? "Gagal menghubungi gateway.");
+        if (response.status === 429) setRemaining(0);
         return;
       }
 
@@ -65,28 +81,31 @@ export function DemoChat() {
       setError("Jaringan bermasalah. Coba lagi.");
     } finally {
       setPending(false);
-      requestAnimationFrame(() => {
-        scrollRef.current?.scrollTo({
-          top: scrollRef.current.scrollHeight,
-          behavior: "smooth",
-        });
-      });
+      scrollToBottom();
     }
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card">
+    <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <Sparkles className="size-4 text-primary" />
         <span className="text-sm font-medium">Coba langsung</span>
         <span className="ml-auto text-xs text-muted-foreground">
-          tanpa perlu daftar
+          {remaining === null
+            ? "tanpa perlu daftar"
+            : `sisa ${remaining} percakapan`}
         </span>
       </div>
 
+      {/*
+        Tinggi dipatok, bukan `flex-1`. Induknya adalah grid yang tingginya
+        mengikuti isi, jadi `flex-1` membuat area ini tumbuh tanpa batas dan
+        percakapan panjang memanjangkan seluruh halaman alih-alih ter-scroll
+        di dalam kotaknya sendiri.
+      */}
       <div
         ref={scrollRef}
-        className="min-h-64 flex-1 space-y-4 overflow-y-auto p-4 scrollbar-thin"
+        className="h-[26rem] space-y-4 overflow-y-auto p-4 scrollbar-thin"
       >
         {turns.length === 0 && (
           <p className="py-10 text-center text-sm text-muted-foreground">

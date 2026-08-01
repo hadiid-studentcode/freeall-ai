@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { KeyRound, LayoutDashboard, ScrollText, Server } from "lucide-react";
+import {
+  KeyRound,
+  LayoutDashboard,
+  ScrollText,
+  Server,
+  TerminalSquare,
+  ShieldCheck,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -10,15 +17,23 @@ const LINKS = [
   { href: "/dashboard", label: "Ringkasan", icon: LayoutDashboard },
   { href: "/dashboard/providers", label: "Provider AI", icon: Server },
   { href: "/dashboard/api-keys", label: "API Key", icon: KeyRound },
+  { href: "/dashboard/playground", label: "Playground", icon: TerminalSquare },
   { href: "/dashboard/logs", label: "Riwayat", icon: ScrollText },
 ];
 
-export function DashboardNav() {
+const ADMIN_LINK = {
+  href: "/dashboard/admin",
+  label: "Admin",
+  icon: ShieldCheck,
+};
+
+export function DashboardNav({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname();
+  const links = isAdmin ? [...LINKS, ADMIN_LINK] : LINKS;
 
   return (
     <nav className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 scrollbar-thin sm:px-6 lg:px-8">
-      {LINKS.map((link) => {
+      {links.map((link) => {
         // "/dashboard" hanya aktif pada kecocokan persis, supaya tidak ikut
         // menyala saat berada di sub-halamannya.
         const active =

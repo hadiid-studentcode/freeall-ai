@@ -5,12 +5,15 @@ import { revalidatePath } from "next/cache";
 import {
   detectProvider,
   listModels,
-  pickBestModel,
+  MAX_FALLBACK_MODELS,
+  rankModels,
 } from "@/lib/ai/discovery";
-import { findPreset } from "@/lib/ai/providers";
+import { findProvider } from "@/lib/ai/catalog";
 import { verifyProviderKey } from "@/lib/ai/verify";
 import { requireUser } from "@/lib/auth/guard";
+import { resolvePlan } from "@/lib/plans";
 import {
+  decryptSecret,
   encryptSecret,
   generateApiKey,
   previewOf,
@@ -48,9 +51,19 @@ export async function createApiKeyAction(
     return { error: "Kuota harian harus bilangan bulat antara 1 dan 100.000." };
   }
 
+  const account = await prisma.user.findUniqueOrThrow({
+    where: { id: user.id },
+    select: { plan: true, planExpiresAt: true },
+  });
+  const plan = resolvePlan(account);
+
   const count = await prisma.apiKey.count({ where: { userId: user.id } });
-  if (count >= 20) {
-    return { error: "Maksimal 20 API key per akun. Hapus yang tidak terpakai." };
+  if (count >= plan.maxApiKeys) {
+    return {
+      error:
+        `Paket ${plan.label} dibatasi ${plan.maxApiKeys} API key. ` +
+        `Hapus yang tidak terpakai, atau tingkatkan paket untuk menambah kapasitas.`,
+    };
   }
 
   const plaintextKey = generateApiKey();
@@ -92,6 +105,34 @@ export async function toggleApiKeyAction(formData: FormData): Promise<void> {
   revalidatePath("/dashboard/api-keys");
 }
 
+/**
+ * Ubah kuota harian sebuah API key.
+ *
+ * Kuota ini adalah rem pemakaian: begitu jumlah request hari ini menyentuh
+ * angka tersebut, `/api/v1/chat` membalas 429 sampai tengah malam. Gunanya
+ * membatasi satu aplikasi agar tidak menghabiskan seluruh kunci provider —
+ * misal aplikasi produksi diberi jatah besar, sedangkan kunci untuk
+ * eksperimen atau dibagikan ke orang lain diberi jatah kecil.
+ */
+export async function updateApiKeyLimitAction(
+  formData: FormData,
+): Promise<void> {
+  const user = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const dailyLimit = Number(formData.get("dailyLimit") ?? 0);
+
+  if (!Number.isInteger(dailyLimit) || dailyLimit < 1 || dailyLimit > 100_000) {
+    return;
+  }
+
+  await prisma.apiKey.updateMany({
+    where: { id, userId: user.id },
+    data: { dailyLimit },
+  });
+
+  revalidatePath("/dashboard/api-keys");
+}
+
 export async function deleteApiKeyAction(formData: FormData): Promise<void> {
   const user = await requireUser();
   const id = String(formData.get("id") ?? "");
@@ -117,6 +158,12 @@ export async function createProviderKeyAction(
   const baseUrl = String(formData.get("baseUrl") ?? "").trim();
   const modelName = String(formData.get("modelName") ?? "").trim();
   const priority = Number(formData.get("priority") ?? 0);
+  // Hanya admin yang boleh mengisi Provider Publik, supaya user biasa tidak
+  // bisa diam-diam menyuguhkan kuncinya ke seluruh pengguna lain.
+  const scope =
+    user.role === "ADMIN" && formData.get("scope") === "SHARED"
+      ? "SHARED"
+      : "PRIVATE";
 
   if (!providerName) return { error: "Pilih penyedia AI terlebih dahulu." };
   if (!rawKey) return { error: "API key provider tidak boleh kosong." };
@@ -127,20 +174,20 @@ export async function createProviderKeyAction(
   // Mode "auto": kenali penyedia dari kunci, lalu tanyakan langsung ke
   // penyedia itu model apa yang hidup. Ini yang membuat user cukup menempel
   // kunci tanpa tahu Base URL maupun nama model.
-  let preset = findPreset(providerName);
-  let discoveredModel: string | null = null;
+  let preset = await findProvider(providerName);
+  // Model diurutkan dari yang paling layak. Yang pertama jadi model utama,
+  // sisanya jadi cadangan pada kunci yang sama — kuota gratis dihitung per
+  // model, jadi model utama yang kena 429 belum tentu menghabiskan yang lain.
+  let ranked: string[] = [];
 
   if (providerName === "auto") {
     const detection = await detectProvider(rawKey);
     if (!detection.ok) return { error: detection.error };
 
     preset = detection.provider.preset;
-    discoveredModel = pickBestModel(
-      detection.provider.models,
-      preset.format,
-    );
+    ranked = rankModels(detection.provider.models, preset.format);
 
-    if (!discoveredModel) {
+    if (ranked.length === 0) {
       return {
         error:
           `Penyedia terdeteksi sebagai ${preset.label}, tetapi tidak ada model ` +
@@ -151,7 +198,6 @@ export async function createProviderKeyAction(
 
   const resolvedProviderName = preset?.id ?? providerName;
   const resolvedBaseUrl = baseUrl || preset?.baseUrl || "";
-  let resolvedModel = modelName || discoveredModel || preset?.defaultModel || "";
 
   if (!resolvedBaseUrl) {
     return {
@@ -162,15 +208,17 @@ export async function createProviderKeyAction(
     return { error: "Base URL harus memakai HTTPS." };
   }
 
-  // Penyedia dipilih manual tanpa nama model: coba temukan model yang hidup
-  // sebelum jatuh ke default preset, yang mungkin sudah dipensiunkan.
-  if (!resolvedModel && preset) {
+  // Penyedia dipilih manual tanpa nama model: cari model yang hidup sebelum
+  // jatuh ke default preset, yang mungkin sudah dipensiunkan.
+  if (ranked.length === 0 && !modelName && preset) {
     const models = await listModels(preset, rawKey, resolvedBaseUrl);
-    resolvedModel =
-      (models && pickBestModel(models, preset.format)) ??
-      preset.defaultModel ??
-      "";
+    ranked = models ? rankModels(models, preset.format) : [];
   }
+
+  const resolvedModel = modelName || ranked[0] || preset?.defaultModel || "";
+  const fallbackModels = (modelName ? ranked : ranked.slice(1))
+    .filter((model) => model !== resolvedModel)
+    .slice(0, MAX_FALLBACK_MODELS);
 
   if (!resolvedModel) {
     return { error: "Nama model wajib diisi untuk penyedia ini." };
@@ -209,7 +257,9 @@ export async function createProviderKeyAction(
       format,
       baseUrl: resolvedBaseUrl,
       modelName: resolvedModel,
+      fallbackModels,
       priority,
+      scope,
       userId: user.id,
       // Kunci yang jelas ditolak tetap disimpan supaya bisa diperbaiki, tapi
       // dinonaktifkan agar tidak memperlambat setiap request fallback.
@@ -252,8 +302,67 @@ export async function createProviderKeyAction(
   return {
     success:
       `Kunci ${label}${detectedNote} berhasil ditambahkan dan diuji ` +
-      `dengan model ${verification.model}.`,
+      `dengan model ${verification.model}.` +
+      (fallbackModels.length > 0
+        ? ` ${fallbackModels.length} model cadangan disiapkan bila model ini kena limit.`
+        : ""),
   };
+}
+
+/**
+ * Tanyakan ulang ke penyedia model apa yang sekarang hidup untuk kunci ini,
+ * lalu perbarui model utama dan cadangannya.
+ *
+ * Berguna saat penyedia memensiunkan model atau menutup kuota gratisnya —
+ * user tidak perlu menghapus dan mendaftarkan ulang kuncinya.
+ */
+export async function refreshProviderModelsAction(
+  formData: FormData,
+): Promise<void> {
+  const user = await requireUser();
+  const id = String(formData.get("id") ?? "");
+
+  const providerKey = await prisma.providerKey.findFirst({
+    where: { id, userId: user.id },
+    select: {
+      providerName: true,
+      keyCiphertext: true,
+      baseUrl: true,
+      modelName: true,
+    },
+  });
+  if (!providerKey) return;
+
+  const preset = await findProvider(providerKey.providerName);
+  if (!preset) return;
+
+  const models = await listModels(
+    preset,
+    decryptSecret(providerKey.keyCiphertext),
+    providerKey.baseUrl ?? undefined,
+  );
+  if (!models || models.length === 0) return;
+
+  const ranked = rankModels(models, preset.format);
+  if (ranked.length === 0) return;
+
+  // Model yang sedang dipakai dipertahankan sebagai utama bila masih hidup —
+  // menyegarkan daftar tidak seharusnya mengganti model yang sudah terbukti.
+  const stillAlive =
+    providerKey.modelName && ranked.includes(providerKey.modelName);
+  const primary = stillAlive ? providerKey.modelName! : ranked[0];
+
+  await prisma.providerKey.updateMany({
+    where: { id, userId: user.id },
+    data: {
+      modelName: primary,
+      fallbackModels: ranked
+        .filter((model) => model !== primary)
+        .slice(0, MAX_FALLBACK_MODELS),
+    },
+  });
+
+  revalidatePath("/dashboard/providers");
 }
 
 export async function toggleProviderKeyAction(

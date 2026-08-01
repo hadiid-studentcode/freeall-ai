@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     template: "%s",
   },
   description:
-    "API Gateway open-source dengan sistem fallback cerdas. Daftarkan API key gratisan Anda dari Groq, Gemini, DeepSeek, dan lainnya.",
+    "API Gateway dengan sistem fallback cerdas. Satukan API key gratisan Anda dari Groq, Gemini, Claude, dan puluhan penyedia lain dalam satu endpoint.",
 };
 
 export default function RootLayout({
@@ -29,10 +29,21 @@ export default function RootLayout({
   return (
     <html
       lang="id"
-      // Aplikasi memakai tema gelap permanen; kelas `dark` mengaktifkan
-      // blok variabel warna di globals.css.
-      className={`dark ${geistSans.variable} ${geistMono.variable} h-full`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full`}
+      suppressHydrationWarning
     >
+      <head>
+        {/*
+          Tema dipasang sebelum halaman digambar. Kalau menunggu React,
+          pengguna bertema terang akan melihat kilatan gelap lebih dulu
+          (flash of wrong theme) pada setiap pemuatan halaman.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('freeall-theme')||'system';var d=t==='dark'||(t==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d)}catch(e){document.documentElement.classList.add('dark')}})()`,
+          }}
+        />
+      </head>
       <body className="min-h-full">{children}</body>
     </html>
   );

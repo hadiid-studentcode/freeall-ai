@@ -1,4 +1,5 @@
 import { API_KEY_PREFIX, sha256 } from "@/lib/crypto";
+import { resolvePlan } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 
 export interface AuthenticatedApiKey {
@@ -6,6 +7,8 @@ export interface AuthenticatedApiKey {
   name: string;
   dailyLimit: number;
   userId: string;
+  /** Batas lonjakan per menit sesuai paket langganan pemiliknya. */
+  burstPerMinute: number;
 }
 
 export type ApiAuthResult =
@@ -49,6 +52,7 @@ export async function authenticateRequest(
       isActive: true,
       dailyLimit: true,
       userId: true,
+      user: { select: { plan: true, planExpiresAt: true } },
     },
   });
 
@@ -72,6 +76,7 @@ export async function authenticateRequest(
       name: apiKey.name,
       dailyLimit: apiKey.dailyLimit,
       userId: apiKey.userId,
+      burstPerMinute: resolvePlan(apiKey.user).burstPerMinute,
     },
   };
 }
