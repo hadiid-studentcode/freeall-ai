@@ -222,6 +222,70 @@ export function pickBestModel(
  * cadangan pada kunci yang sama — berguna karena kuota gratis umumnya
  * dihitung per model, bukan per akun.
  */
+/**
+ * Keluarga model kecil/terbuka.
+ *
+ * Nomor generasi tidak sebanding antar keluarga: `gemma-4` bukan penerus
+ * `gemini-3.6`, melainkan lini terpisah yang jauh lebih kecil. Tanpa penanda
+ * ini, Gemma 4 mengungguli Gemini 3.6 hanya karena angkanya lebih besar — dan
+ * pengguna dilayani model yang jelas lebih lemah.
+ *
+ * Model-model ini tetap layak jadi cadangan, hanya tidak boleh mendahului
+ * lini utama penyedianya.
+ */
+const SECONDARY_FAMILIES = [
+  "gemma",
+  "phi",
+  "smol",
+  "tinyllama",
+  "granite",
+  "olmo",
+  "ministral",
+  "codegemma",
+  "recurrentgemma",
+];
+
+/**
+ * Nomor generasi yang tersirat pada nama model.
+ *
+ * Diambil dari angka pertama pada id: `gemini-3.1-pro` → 3.1,
+ * `llama-3.3-70b-versatile` → 3.3, `gpt-4o-mini` → 4. Model tanpa angka
+ * (mis. `gemini-flash-lite-latest`) menghasilkan 0 dan mengandalkan bobot
+ * lain — terutama `latest`.
+ */
+function generation(id: string): number {
+  // Penanggalan dibuang lebih dulu. Tanpa ini
+  // `deep-research-pro-preview-12-2025` terbaca sebagai generasi 12 dan
+  // melompati setiap model sungguhan — persis yang sempat terjadi.
+  const cleaned = id
+    .replace(/[-_]20\d{2}[-_]\d{1,2}[-_]\d{1,2}\b/g, " ")
+    .replace(/[-_]\d{1,2}[-_]20\d{2}\b/g, " ")
+    .replace(/[-_]20\d{6}\b/g, " ")
+    .replace(/[-_]20\d{2}\b/g, " ")
+    // Ukuran parameter juga bukan versi: pada `openai/gpt-oss-20b`, angka 20
+    // sempat terbaca sebagai generasi 20 dan melompati setiap model lain.
+    .replace(/\d+(?:\.\d+)?\s*b\b/gi, " ");
+
+  const match = cleaned.match(/(\d+(?:\.\d+)?)/);
+  if (!match) return 0;
+
+  const value = Number(match[1]);
+  // Tidak ada keluarga model yang mencapai versi 20.
+  return Number.isFinite(value) && value <= 20 ? value : 0;
+}
+
+/**
+ * Jumlah parameter dalam miliar, bila disebut pada nama model.
+ *
+ * `llama-3.3-70b-versatile` → 70, `openai/gpt-oss-120b` → 120. Dipakai sebagai
+ * penanda kemampuan untuk model yang tidak memakai kata seperti "pro" atau
+ * "large" — tanpa ini `gpt-oss-120b` tampak sekelas model 8B.
+ */
+function parameterBillions(id: string): number {
+  const match = id.match(/(\d+(?:\.\d+)?)\s*b\b/i);
+  return match ? Number(match[1]) : 0;
+}
+
 export function rankModels(
   models: string[],
   format: ProviderFormat,
@@ -246,20 +310,93 @@ export function rankModels(
     let value = 0;
 
     if (lower.endsWith(":free")) value += 100;
-    // Alias yang mengikuti versi terbaru tidak akan usang seperti versi berpatok.
-    if (has("latest")) value += 40;
-    // Varian ringan biasanya punya kuota gratis paling longgar.
-    if (has("flash", "mini", "small", "lite", "instant", "haiku")) value += 25;
-    if (has("70b", "72b", "large", "pro", "opus", "sonnet")) value += 15;
-    if (has("instruct", "chat", "it")) value += 10;
-    // Pratinjau dan eksperimen cenderung punya kuota lebih ketat.
-    if (has("preview", "exp", "beta", "alpha")) value -= 30;
+
+    /*
+     * Nomor generasi jadi faktor terkuat.
+     *
+     * Tanpa ini skornya buta versi: `gemini-2.5-pro` dan `gemini-3.1-pro`
+     * dianggap sama persis, sehingga urutan di antara keduanya ditentukan
+     * kebetulan. Padahal justru itulah yang paling menentukan "model tertinggi".
+     */
+    value += generation(id) * 12;
+
+    /*
+     * Model paling mampu didahulukan, varian ringan jadi jaring pengaman.
+     *
+     * Bobotnya pernah terbalik — varian ringan menang karena kuota gratisnya
+     * lebih longgar. Hasilnya: pengguna selalu dilayani model terlemah meski
+     * kuota model terbaiknya masih utuh. Fallback memang ada justru untuk
+     * menangani kehabisan kuota, jadi menghemat kuota di muka dengan
+     * mengorbankan kualitas setiap jawaban bukan pertukaran yang sepadan.
+     */
+    if (has("large", "pro", "opus", "sonnet", "max", "ultra")) value += 30;
+
+    // Ukuran parameter sebagai penanda kemampuan, untuk model yang namanya
+    // tidak memakai kata tingkatan sama sekali.
+    const billions = parameterBillions(id);
+    if (billions >= 100) value += 40;
+    else if (billions >= 30) value += 30;
+    if (has("flash", "mini", "small", "lite", "instant", "haiku")) value += 10;
+    if (has("instruct", "chat", "it")) value += 5;
+
+    /*
+     * Alias `latest` tidak pernah usang, tapi juga tidak mengumumkan
+     * generasinya. Bobotnya sengaja sedang: cukup untuk menang atas model
+     * segenerasi yang berpatok versi, tidak cukup untuk mengalahkan generasi
+     * yang benar-benar lebih baru.
+     */
+    if (has("latest")) value += 15;
+
+    /*
+     * `preview` hanya dihukum ringan.
+     *
+     * Google merilis model tercanggihnya lebih dulu sebagai preview —
+     * `gemini-3.1-pro-preview` dan `gemini-3-pro-preview` tidak punya padanan
+     * stabil. Penalti besar membuat model terbaik justru terlempar ke dasar
+     * daftar, persis kebalikan dari yang diinginkan. Yang benar-benar tidak
+     * stabil (`exp`, `alpha`, `beta`) tetap dihukum berat.
+     */
+    if (has("preview")) value -= 5;
+    if (has("exp", "experimental", "beta", "alpha")) value -= 25;
     if (has("deprecated", "legacy")) value -= 50;
+
+    if (SECONDARY_FAMILIES.some((family) => lower.startsWith(family))) {
+      value -= 40;
+    }
 
     return value;
   };
 
-  return [...candidates].sort((a, b) => score(b) - score(a));
+  const sorted = [...candidates].sort((a, b) => score(b) - score(a));
+
+  /*
+   * Buang varian yang berbagi kuota dengan model yang sudah dipilih.
+   *
+   * `gemini-3.1-pro-preview-customtools` adalah model yang sama dengan
+   * `gemini-3.1-pro-preview`, hanya beda cara pemanggilan alat — kuotanya satu
+   * kolam. Menyimpannya sebagai cadangan berarti membuang satu percobaan pada
+   * kuota yang sudah jelas habis.
+   *
+   * Yang dibuang hanya akhiran non-tingkat: `-lite`, `-mini`, dan sejenisnya
+   * menandai model dengan kuota terpisah, jadi tetap dipertahankan.
+   */
+  const TIER_SUFFIXES = ["lite", "mini", "flash", "pro", "small", "large", "max"];
+  const kept: string[] = [];
+
+  for (const candidate of sorted) {
+    const isVariant = kept.some((chosen) => {
+      if (!candidate.startsWith(`${chosen}-`)) return false;
+
+      const suffix = candidate.slice(chosen.length + 1).toLowerCase();
+      const hasDigits = /\d/.test(suffix);
+      const isTier = TIER_SUFFIXES.some((word) => suffix.split(/[^a-z]+/).includes(word));
+      return !hasDigits && !isTier;
+    });
+
+    if (!isVariant) kept.push(candidate);
+  }
+
+  return kept;
 }
 
 /** Berapa banyak model cadangan yang disimpan per kunci. */

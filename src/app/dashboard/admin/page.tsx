@@ -16,6 +16,8 @@ import {
   rejectManualPaymentAction,
   saveMidtransCredentialsAction,
   toggleKeyScopeAction,
+  updateDemoGlobalLimitAction,
+  updateDemoIpLimitsAction,
   updateManualInstructionsAction,
   updatePaymentModeAction,
   toggleUserRoleAction,
@@ -57,7 +59,11 @@ import { formatPrice } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { PLAN_ORDER, resolvePlan } from "@/lib/plans";
 import { headers } from "next/headers";
-import { getPublicDailyLimit } from "@/lib/settings";
+import {
+  getDemoGlobalDailyLimit,
+  getDemoIpLimits,
+  getPublicDailyLimit,
+} from "@/lib/settings";
 import { formatDateTime, formatNumber, formatRelative } from "@/lib/utils";
 
 export async function generateMetadata() {
@@ -129,11 +135,20 @@ export default async function AdminPage() {
     prisma.customProvider.findMany({ orderBy: { createdAt: "asc" } }),
   ]);
 
-  const [paymentMode, midtrans, manualInstructions, pendingPayments, headerBag] =
-    await Promise.all([
+  const [
+    paymentMode,
+    midtrans,
+    manualInstructions,
+    demoIpLimits,
+    demoGlobalLimit,
+    pendingPayments,
+    headerBag,
+  ] = await Promise.all([
       getPaymentMode(),
       getMidtransStatus(),
       getManualInstructions(),
+      getDemoIpLimits(),
+      getDemoGlobalDailyLimit(),
       // Antrean kerja admin: tagihan manual yang menunggu keputusan manusia.
       prisma.payment.findMany({
         where: { method: "MANUAL", status: { in: ["AWAITING_REVIEW", "PENDING"] } },
@@ -262,6 +277,86 @@ export default async function AdminPage() {
               {d.quotaNote}
             </p>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{d.demoTitle}</CardTitle>
+          <CardDescription>{d.demoDesc}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <form
+            action={updateDemoIpLimitsAction}
+            className="flex flex-wrap items-end gap-3"
+          >
+            <div className="space-y-2">
+              <label
+                htmlFor="demo-hour"
+                className="text-sm font-medium text-foreground/90"
+              >
+                {d.demoPerHour}
+              </label>
+              <Input
+                id="demo-hour"
+                name="perHour"
+                type="number"
+                min={0}
+                max={100000}
+                defaultValue={demoIpLimits.perHour}
+                className="w-32"
+              />
+            </div>
+            <div className="space-y-2">
+              <label
+                htmlFor="demo-day"
+                className="text-sm font-medium text-foreground/90"
+              >
+                {d.demoPerDay}
+              </label>
+              <Input
+                id="demo-day"
+                name="perDay"
+                type="number"
+                min={0}
+                max={100000}
+                defaultValue={demoIpLimits.perDay}
+                className="w-32"
+              />
+            </div>
+            <Button type="submit">{d.save}</Button>
+          </form>
+
+          <form
+            action={updateDemoGlobalLimitAction}
+            className="flex flex-wrap items-end gap-3 border-t border-border pt-5"
+          >
+            <div className="space-y-2">
+              <label
+                htmlFor="demo-global"
+                className="text-sm font-medium text-foreground/90"
+              >
+                {d.demoGlobal}
+              </label>
+              <Input
+                id="demo-global"
+                name="limit"
+                type="number"
+                min={0}
+                max={1000000}
+                defaultValue={demoGlobalLimit}
+                className="w-40"
+              />
+            </div>
+            <Button type="submit" variant="outline">
+              {d.save}
+            </Button>
+            <p className="max-w-md text-xs text-muted-foreground">
+              {d.demoGlobalHint}
+            </p>
+          </form>
+
+          <p className="text-xs text-muted-foreground">{d.demoNote}</p>
         </CardContent>
       </Card>
 

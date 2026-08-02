@@ -161,6 +161,15 @@ model ProviderKey {
   /// per model, jadi saat model utama kena 429 sering kali model lain di
   /// akun yang sama masih punya sisa jatah.
   fallbackModels String[]  @default([])
+  /// Model yang sedang "istirahat" karena kena 429, beserta kapan boleh dicoba
+  /// lagi: `{ "gemini-2.5-pro": "2026-08-03T00:00:00.000Z" }`.
+  ///
+  /// Ini menggantikan promosi model cadangan menjadi model utama. Promosi
+  /// membuat model terbaik hilang selamanya begitu kuotanya habis sekali,
+  /// karena model lemah yang menggantikannya terus berhasil. Dengan cooldown,
+  /// urutan model tetap mengikuti peringkat kualitas dan kehabisan kuota hanya
+  /// menyingkirkan satu model untuk sementara.
+  modelCooldowns Json?
   userId         String? // Pemilik kunci; null hanya untuk kunci sistem
   user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   scope          KeyScope  @default(PRIVATE)

@@ -707,6 +707,15 @@ export const id = {
     },
 
     admin: {
+      demoTitle: "Batas demo halaman depan",
+      demoDesc:
+        "Pengunjung bisa mencoba chat tanpa membuat akun. Batas-batas ini yang menjaga kunci provider Anda tidak terkuras orang lewat halaman depan. Isi 0 untuk mematikan sebuah batas.",
+      demoPerHour: "Per pengunjung, per jam",
+      demoPerDay: "Per pengunjung, per hari",
+      demoGlobal: "Seluruh pengunjung, per hari",
+      demoGlobalHint:
+        "Pagar terakhir: batas per pengunjung tidak menolong kalau yang datang seribu orang berbeda. Isi 0 untuk mematikan demo sepenuhnya.",
+      demoNote: "Berlaku sejak percakapan berikutnya.",
       paymentTitle: "Pembayaran",
       paymentDesc:
         "Tentukan jalur yang boleh dipakai pengguna untuk naik paket. Jalur Midtrans hanya benar-benar terbuka bila kredensialnya sudah terpasang.",

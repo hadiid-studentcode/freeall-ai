@@ -1,5 +1,5 @@
-import { isProduction } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import type { DemoIpLimits } from "@/lib/settings";
 import { resolvePlan } from "@/lib/plans";
 import {
   getDemoGlobalDailyLimit,
@@ -188,19 +188,14 @@ export function checkBurstLimit(
 /**
  * Demo landing page: tanpa API key, dibatasi per IP.
  *
- * Batas ini menjaga instance publik agar kunci provider tidak dihabiskan
- * pengunjung. Pada instance self-hosted yang dipakai pemiliknya sendiri
- * batas itu justru mengganggu, jadi:
- * - di mode pengembangan batas dimatikan sepenuhnya;
- * - di produksi bisa diatur lewat `DEMO_RATE_LIMIT` (0 = tanpa batas).
+ * Batasnya datang dari pengaturan admin (lihat `getDemoIpLimits`), bukan dari
+ * environment variable, dan berlaku sama di pengembangan maupun produksi.
+ * Sebelumnya batas ini dimatikan di mode pengembangan — akibatnya jalur yang
+ * paling terbuka ke kunci provider justru tidak pernah teruji sebelum dipakai
+ * sungguhan. Admin bisa mengisi 0 kalau memang ingin membukanya tanpa batas.
  */
-const DEMO_LIMIT = Number(process.env.DEMO_RATE_LIMIT ?? 10);
 const DEMO_WINDOW_MS = 60 * 60_000;
-/** Batas kedua per IP, sepanjang hari — menahan pemakaian jam demi jam. */
-const DEMO_DAILY_LIMIT = DEMO_LIMIT * 3;
 const DEMO_DAY_MS = 24 * 60 * 60_000;
-const DEMO_LIMIT_ENABLED =
-  isProduction && Number.isFinite(DEMO_LIMIT) && DEMO_LIMIT > 0;
 
 const UNLIMITED: RateLimitResult = { allowed: true, remaining: Infinity };
 
@@ -211,21 +206,39 @@ const UNLIMITED: RateLimitResult = { allowed: true, remaining: Infinity };
  * diterima — supaya kegagalan di sisi provider tidak ikut menghabiskan jatah
  * pengunjung, yang dulu membuat demo terasa "habis" padahal belum dipakai.
  */
-export function peekIpRateLimit(ip: string): RateLimitResult {
-  if (!DEMO_LIMIT_ENABLED) return UNLIMITED;
-
+export function peekIpRateLimit(
+  ip: string,
+  limits: DemoIpLimits,
+): RateLimitResult {
   // Dua jendela sekaligus: yang per jam menahan lonjakan, yang harian
   // menahan pemakaian yang dicicil sepanjang hari.
-  const hourly = consume(`ip:h:${ip}`, DEMO_LIMIT, DEMO_WINDOW_MS, false);
-  if (!hourly.allowed) return hourly;
+  if (limits.perHour > 0) {
+    const hourly = consume(`ip:h:${ip}`, limits.perHour, DEMO_WINDOW_MS, false);
+    if (!hourly.allowed) return hourly;
+  }
 
-  return consume(`ip:d:${ip}`, DEMO_DAILY_LIMIT, DEMO_DAY_MS, false);
+  if (limits.perDay > 0) {
+    return consume(`ip:d:${ip}`, limits.perDay, DEMO_DAY_MS, false);
+  }
+
+  return limits.perHour > 0
+    ? consume(`ip:h:${ip}`, limits.perHour, DEMO_WINDOW_MS, false)
+    : UNLIMITED;
 }
 
-export function consumeIpRateLimit(ip: string): RateLimitResult {
-  if (!DEMO_LIMIT_ENABLED) return UNLIMITED;
-  consume(`ip:d:${ip}`, DEMO_DAILY_LIMIT, DEMO_DAY_MS, true);
-  return consume(`ip:h:${ip}`, DEMO_LIMIT, DEMO_WINDOW_MS, true);
+export function consumeIpRateLimit(
+  ip: string,
+  limits: DemoIpLimits,
+): RateLimitResult {
+  if (limits.perDay > 0) {
+    consume(`ip:d:${ip}`, limits.perDay, DEMO_DAY_MS, true);
+  }
+  if (limits.perHour > 0) {
+    return consume(`ip:h:${ip}`, limits.perHour, DEMO_WINDOW_MS, true);
+  }
+  return limits.perDay > 0
+    ? consume(`ip:d:${ip}`, limits.perDay, DEMO_DAY_MS, false)
+    : UNLIMITED;
 }
 
 /**
@@ -267,8 +280,6 @@ export async function checkDemoGlobalQuota(
 
   return { allowed: true, remaining: limit - used };
 }
-
-export const demoLimitPerHour = DEMO_LIMIT_ENABLED ? DEMO_LIMIT : null;
 
 /** Ambil IP klien dari header proxy yang lazim dipakai. */
 export function getClientIp(request: Request): string {

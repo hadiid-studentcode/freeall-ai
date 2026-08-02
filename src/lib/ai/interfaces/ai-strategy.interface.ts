@@ -49,17 +49,30 @@ export class AiProviderError extends Error {
   readonly provider: string;
   readonly status?: number;
   readonly cause?: unknown;
+  /**
+   * Isi header `Retry-After`, bila provider mengirimkannya.
+   *
+   * Dipakai untuk menentukan berapa lama sebuah model diistirahatkan. Tanpa
+   * ini kita hanya bisa menebak, dan tebakan yang terlalu pendek berarti
+   * menghabiskan percobaan sia-sia berulang kali.
+   */
+  readonly retryAfterSeconds?: number;
 
   constructor(
     provider: string,
     message: string,
-    options: { status?: number; cause?: unknown } = {},
+    options: {
+      status?: number;
+      cause?: unknown;
+      retryAfterSeconds?: number;
+    } = {},
   ) {
     super(message);
     this.name = "AiProviderError";
     this.provider = provider;
     this.status = options.status;
     this.cause = options.cause;
+    this.retryAfterSeconds = options.retryAfterSeconds;
   }
 
   /** 429 — kuota/limit habis. Kunci masih sah, tinggal dicoba lagi nanti. */

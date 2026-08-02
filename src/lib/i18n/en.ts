@@ -706,6 +706,15 @@ export const en: typeof id = {
     },
 
     admin: {
+      demoTitle: "Front-page demo limits",
+      demoDesc:
+        "Visitors can try the chat without creating an account. These limits are what keep your provider keys from being drained through the front page. Set a limit to 0 to switch it off.",
+      demoPerHour: "Per visitor, per hour",
+      demoPerDay: "Per visitor, per day",
+      demoGlobal: "All visitors, per day",
+      demoGlobalHint:
+        "The last line of defence: per-visitor limits do not help when a thousand different people show up. Set it to 0 to disable the demo entirely.",
+      demoNote: "Takes effect from the next conversation.",
       paymentTitle: "Payments",
       paymentDesc:
         "Decide which routes users may take to upgrade. The Midtrans route only truly opens once its credentials are in place.",

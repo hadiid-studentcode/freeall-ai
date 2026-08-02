@@ -19,6 +19,7 @@ import {
 import { markOrderPaid } from "@/lib/payments/orders";
 import {
   setDemoGlobalDailyLimit,
+  setDemoIpLimits,
   setPublicDailyLimit,
 } from "@/lib/settings";
 
@@ -110,6 +111,27 @@ export async function updateDemoGlobalLimitAction(
   if (!Number.isInteger(limit) || limit < 0 || limit > 1_000_000) return;
 
   await setDemoGlobalDailyLimit(limit);
+  revalidatePath("/dashboard/admin");
+}
+
+/**
+ * Batas demo per pengunjung yang belum punya akun.
+ *
+ * Dua jendela sekaligus: per jam menahan lonjakan, per hari menahan pemakaian
+ * yang dicicil sepanjang hari. Isi 0 untuk mematikan salah satunya.
+ */
+export async function updateDemoIpLimitsAction(
+  formData: FormData,
+): Promise<void> {
+  await requireAdmin();
+
+  const perHour = Number(formData.get("perHour") ?? -1);
+  const perDay = Number(formData.get("perDay") ?? -1);
+
+  const valid = (n: number) => Number.isInteger(n) && n >= 0 && n <= 100_000;
+  if (!valid(perHour) || !valid(perDay)) return;
+
+  await setDemoIpLimits({ perHour, perDay });
   revalidatePath("/dashboard/admin");
 }
 

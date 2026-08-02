@@ -19,6 +19,42 @@ const MAX_KEYS = 6;
  */
 const MAX_ATTEMPTS = 10;
 
+/**
+ * Lama istirahat sebuah model setelah kena 429, bila provider tidak memberi
+ * tahu lewat header `Retry-After`.
+ *
+ * Angkanya sengaja sedang: kuota gratis kadang direset per menit, kadang per
+ * hari, dan kita tidak bisa membedakannya dari balasan 429 saja. Istirahat
+ * yang terlalu panjang membuat model terbaik menganggur padahal kuotanya sudah
+ * pulih; yang terlalu pendek membuat tiap request membuang satu percobaan.
+ * Lima belas menit berarti paling banyak satu percobaan sia-sia per seperempat
+ * jam, dan model terbaik kembali dipakai selambat-lambatnya 15 menit setelah
+ * kuotanya pulih.
+ */
+const DEFAULT_MODEL_COOLDOWN_MS = 15 * 60 * 1000;
+
+/** Bentuk kolom `ProviderKey.modelCooldowns`: nama model → waktu boleh dicoba lagi. */
+type ModelCooldowns = Record<string, string>;
+
+function readCooldowns(value: unknown): ModelCooldowns {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+  const result: ModelCooldowns = {};
+  for (const [model, until] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof until === "string") result[model] = until;
+  }
+  return result;
+}
+
+/** Apakah model ini masih dalam masa istirahat? */
+function isResting(cooldowns: ModelCooldowns, model: string, now: number): boolean {
+  const until = cooldowns[model];
+  if (!until) return false;
+
+  const at = Date.parse(until);
+  return Number.isFinite(at) && at > now;
+}
+
 export interface ProcessChatOptions {
   messages: ChatMessage[];
   temperature?: number;
@@ -105,9 +141,20 @@ export class AiManager {
         .filter((model): model is string => Boolean(model))
         .filter((model, index, all) => all.indexOf(model) === index);
 
+      // Urutan model SELALU mengikuti peringkat kualitas — model utama lebih
+      // dulu, cadangan menyusul. Yang sedang istirahat karena 429 hanya
+      // digeser ke belakang, bukan dibuang: kalau semuanya kebetulan sedang
+      // istirahat, mencoba tetap lebih baik daripada langsung menyerah, sebab
+      // kuota bisa saja sudah pulih lebih awal dari perkiraan.
+      const cooldowns = readCooldowns(providerKey.modelCooldowns);
+      const now = Date.now();
+      const ready = models.filter((model) => !isResting(cooldowns, model, now));
+      const resting = models.filter((model) => isResting(cooldowns, model, now));
+      const ordered = [...ready, ...resting];
+
       // Kunci tanpa model tersimpan tetap dicoba: Factory akan mengambil
       // default dari preset provider.
-      const attemptModels = models.length > 0 ? models : [null];
+      const attemptModels = ordered.length > 0 ? ordered : [null];
       let keyDisabled = false;
 
       for (const model of attemptModels) {
@@ -213,6 +260,7 @@ export class AiManager {
       baseUrl: true,
       modelName: true,
       fallbackModels: true,
+      modelCooldowns: true,
     } as const;
 
     const orderBy = [
@@ -304,8 +352,28 @@ export class AiManager {
           lastErrorAt: new Date(),
         },
       });
+    } else if (providerError.isRateLimit && context.model) {
+      // 429 menyangkut SATU model, bukan kuncinya. Model itu diistirahatkan
+      // sampai waktu tertentu supaya request berikutnya langsung lompat ke
+      // model berikutnya tanpa membuang satu percobaan — tetapi urutannya
+      // tidak diubah, sehingga model terbaik kembali dipakai begitu masa
+      // istirahatnya lewat.
+      const restMs = providerError.retryAfterSeconds
+        ? providerError.retryAfterSeconds * 1000
+        : DEFAULT_MODEL_COOLDOWN_MS;
+
+      await this.restModel(providerKeyId, context.model, restMs);
+
+      await prisma.providerKey.updateMany({
+        where: { id: providerKeyId },
+        data: {
+          errorCount: { increment: 1 },
+          lastError: message,
+          lastErrorAt: new Date(),
+        },
+      });
     } else {
-      // 429 dan gangguan sementara: kunci tetap aktif, hanya dicatat.
+      // Gangguan sementara lain: kunci tetap aktif, hanya dicatat.
       await prisma.providerKey.updateMany({
         where: { id: providerKeyId },
         data: {
@@ -328,12 +396,14 @@ export class AiManager {
   }
 
   /**
-   * Catat keberhasilan, dan bila yang berhasil adalah model cadangan,
-   * naikkan model itu menjadi model utama.
+   * Catat keberhasilan dan akhiri masa istirahat model yang baru saja berhasil.
    *
-   * Tujuannya menyembuhkan diri: kalau model utama kehabisan kuota harian,
-   * request berikutnya langsung memakai model yang terbukti jalan alih-alih
-   * membuang satu percobaan gagal setiap kali.
+   * Model yang berhasil TIDAK dinaikkan jadi model utama. Dulu begitu, dan
+   * akibatnya merugikan: sekali model terbaik kena 429, model cadangan yang
+   * lebih lemah naik jadi utama — lalu karena model lemah itu terus berhasil,
+   * model terbaik tidak pernah dicoba lagi bahkan setelah kuotanya pulih.
+   * Peringkat kualitas kini yang menentukan urutan, dan kehabisan kuota hanya
+   * menyingkirkan satu model untuk sementara lewat `modelCooldowns`.
    */
   private static async recordSuccess(
     providerKeyId: string,
@@ -341,11 +411,15 @@ export class AiManager {
   ): Promise<void> {
     const current = await prisma.providerKey.findUnique({
       where: { id: providerKeyId },
-      select: { modelName: true, fallbackModels: true },
+      select: { modelCooldowns: true },
     });
     if (!current) return;
 
-    const promote = current.modelName !== null && current.modelName !== usedModel;
+    // Berhasil berarti kuotanya jelas sudah pulih, jadi catatan istirahatnya
+    // dihapus lebih awal daripada menunggu tenggatnya lewat.
+    const cooldowns = readCooldowns(current.modelCooldowns);
+    const cleared = { ...cooldowns };
+    delete cleared[usedModel];
 
     await prisma.providerKey.updateMany({
       where: { id: providerKeyId },
@@ -353,21 +427,39 @@ export class AiManager {
         successCount: { increment: 1 },
         lastUsedAt: new Date(),
         lastError: null,
-        ...(promote
-          ? {
-              modelName: usedModel,
-              // Model utama lama tetap disimpan sebagai cadangan — kuotanya
-              // biasanya pulih pada reset harian berikutnya. Duplikat dibuang
-              // karena model utama lama bisa saja sudah ada di daftar cadangan,
-              // dan entri kembar akan memboroskan jatah percobaan.
-              fallbackModels: [
-                ...new Set([current.modelName as string, ...current.fallbackModels]),
-              ]
-                .filter((m) => m !== usedModel)
-                .slice(0, 5),
-            }
-          : {}),
+        ...(Object.keys(cleared).length === Object.keys(cooldowns).length
+          ? {}
+          : { modelCooldowns: cleared }),
       },
+    });
+  }
+
+  /** Istirahatkan satu model sampai waktu tertentu. */
+  private static async restModel(
+    providerKeyId: string,
+    model: string,
+    durationMs: number,
+  ): Promise<void> {
+    const current = await prisma.providerKey.findUnique({
+      where: { id: providerKeyId },
+      select: { modelCooldowns: true },
+    });
+    if (!current) return;
+
+    const cooldowns = readCooldowns(current.modelCooldowns);
+    const now = Date.now();
+
+    // Catatan yang sudah kedaluwarsa ikut dibuang, supaya kolomnya tidak
+    // menggelembung oleh nama model yang sudah lama tidak dipakai.
+    const kept: ModelCooldowns = {};
+    for (const [name, until] of Object.entries(cooldowns)) {
+      if (isResting(cooldowns, name, now)) kept[name] = until;
+    }
+    kept[model] = new Date(now + durationMs).toISOString();
+
+    await prisma.providerKey.updateMany({
+      where: { id: providerKeyId },
+      data: { modelCooldowns: kept },
     });
   }
 

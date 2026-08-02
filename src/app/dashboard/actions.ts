@@ -222,12 +222,17 @@ export async function createProviderKeyAction(
     ranked = models ? rankModels(models, preset.format) : [];
   }
 
-  const resolvedModel = modelName || ranked[0] || preset?.defaultModel || "";
-  const fallbackModels = (modelName ? ranked : ranked.slice(1))
-    .filter((model) => model !== resolvedModel)
-    .slice(0, MAX_FALLBACK_MODELS);
+  // Daftar calon, terurut peringkat. Kalau pengguna menyebut model tertentu,
+  // itu yang dipakai — pilihannya tidak boleh diam-diam diganti.
+  const candidates = modelName
+    ? [modelName]
+    : ranked.length > 0
+      ? ranked
+      : preset?.defaultModel
+        ? [preset.defaultModel]
+        : [];
 
-  if (!resolvedModel) {
+  if (candidates.length === 0) {
     return { error: t.errors.provider.modelRequired };
   }
 
@@ -251,12 +256,21 @@ export async function createProviderKeyAction(
       keyCiphertext,
       format,
       baseUrl: resolvedBaseUrl,
-      modelName: resolvedModel,
     },
+    candidates,
     t.errors.verify,
   );
 
   const rejected = verification.status === "rejected";
+
+  // Model yang terbukti jalan jadi model utama. Kalau tidak ada yang berhasil,
+  // pilihan teratas tetap disimpan supaya kuncinya bisa diperbaiki, bukan
+  // hilang begitu saja.
+  const resolvedModel =
+    verification.status === "ok" ? verification.model : candidates[0];
+  const fallbackModels = candidates
+    .filter((model) => model !== resolvedModel)
+    .slice(0, MAX_FALLBACK_MODELS);
 
   await prisma.providerKey.create({
     data: {
@@ -359,11 +373,10 @@ export async function refreshProviderModelsAction(
   const ranked = rankModels(models, preset.format);
   if (ranked.length === 0) return;
 
-  // Model yang sedang dipakai dipertahankan sebagai utama bila masih hidup —
-  // menyegarkan daftar tidak seharusnya mengganti model yang sudah terbukti.
-  const stillAlive =
-    providerKey.modelName && ranked.includes(providerKey.modelName);
-  const primary = stillAlive ? providerKey.modelName! : ranked[0];
+  // Peringkat kualitas yang menentukan, bukan model yang kebetulan sedang
+  // terpasang. Sebelumnya model yang sedang dipakai dipertahankan sebagai
+  // utama — dan itu mengekalkan model lemah yang dulu naik lewat promosi.
+  const primary = ranked[0];
 
   await prisma.providerKey.updateMany({
     where: { id, userId: user.id },
@@ -372,6 +385,10 @@ export async function refreshProviderModelsAction(
       fallbackModels: ranked
         .filter((model) => model !== primary)
         .slice(0, MAX_FALLBACK_MODELS),
+      // Daftar model berubah, jadi catatan istirahat lama tidak lagi relevan.
+      // Objek kosong, bukan `undefined` — di Prisma `undefined` berarti
+      // "jangan ubah kolom ini", yang justru mempertahankan catatan lama.
+      modelCooldowns: {},
     },
   });
 

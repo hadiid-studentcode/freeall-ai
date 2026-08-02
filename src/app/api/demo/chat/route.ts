@@ -9,10 +9,10 @@ import { parseChatPayload } from "@/lib/api/chat-payload";
 import {
   checkDemoGlobalQuota,
   consumeIpRateLimit,
-  demoLimitPerHour,
   getClientIp,
   peekIpRateLimit,
 } from "@/lib/rate-limit";
+import { getDemoIpLimits } from "@/lib/settings";
 import { getTranslations } from "@/lib/i18n";
 
 export const runtime = "nodejs";
@@ -45,14 +45,17 @@ export async function POST(request: Request) {
   }
 
   const ip = getClientIp(request);
-  const limit = peekIpRateLimit(ip);
+  // Batas per pengunjung diatur admin, jadi dibaca per request — perubahannya
+  // berlaku sejak request berikutnya tanpa perlu deploy ulang.
+  const ipLimits = await getDemoIpLimits();
+  const limit = peekIpRateLimit(ip, ipLimits);
 
   if (!limit.allowed) {
     const minutes = Math.ceil((limit.retryAfterSeconds ?? 0) / 60);
     return NextResponse.json(
       {
         success: false,
-        error: d.hourlyLimit(demoLimitPerHour ?? 0, minutes),
+        error: d.hourlyLimit(ipLimits.perHour, minutes),
       },
       {
         status: 429,
@@ -91,7 +94,7 @@ export async function POST(request: Request) {
     });
 
     // Jatah baru dipotong setelah jawaban benar-benar didapat.
-    const spent = consumeIpRateLimit(ip);
+    const spent = consumeIpRateLimit(ip, ipLimits);
 
     return NextResponse.json({
       success: true,

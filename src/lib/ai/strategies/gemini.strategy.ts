@@ -5,7 +5,10 @@ import {
   type ChatRequest,
   type ChatResult,
 } from "@/lib/ai/interfaces/ai-strategy.interface";
-import { describeHttpError } from "@/lib/ai/strategies/http-error";
+import {
+  describeHttpError,
+  parseRetryAfter,
+} from "@/lib/ai/strategies/http-error";
 
 interface GeminiResponse {
   candidates?: Array<{
@@ -113,7 +116,10 @@ export class GeminiStrategy implements AiStrategy {
           structuredMessage: payload?.error?.message,
           rawBody,
         }),
-        { status: response.status },
+        {
+          status: response.status,
+          retryAfterSeconds: parseRetryAfter(response.headers),
+        },
       );
     }
 
