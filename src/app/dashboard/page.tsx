@@ -20,14 +20,21 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/guard";
+import { getTranslations } from "@/lib/i18n";
+import { describeDisabledReason } from "@/lib/providers/disabled-reason";
 import { resolvePlan } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { formatNumber, formatRelative } from "@/lib/utils";
 
-export const metadata = { title: "Ringkasan · FreeAll AI" };
+export async function generateMetadata() {
+  const { t } = await getTranslations();
+  return { title: `${t.dash.nav.overview} · FreeAll AI` };
+}
 
 export default async function DashboardPage() {
   const user = await requireUser();
+  const { t } = await getTranslations();
+  const d = t.dash.overview;
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -93,6 +100,8 @@ export default async function DashboardPage() {
   ]);
 
   const plan = resolvePlan(account);
+  const planLabel =
+    account.role === "ADMIN" ? t.dash.plan.adminLabel : t.plans[plan.id].label;
 
   const successRate =
     requestsToday === 0
@@ -104,27 +113,27 @@ export default async function DashboardPage() {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Ringkasan
+            {d.title}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Selamat datang kembali{user.name ? `, ${user.name}` : ""}. Berikut
-            kondisi gateway Anda hari ini.
+            {d.welcome}
+            {user.name ? `, ${user.name}` : ""}. {d.subtitle}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <Link
             href="/dashboard/plan"
             className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:border-primary/40"
-            title="Lihat paket, kuota, dan pemakaian Anda"
+            title={d.planLabel}
           >
-            <span className="text-muted-foreground">Paket</span>
+            <span className="text-muted-foreground">{d.planLabel}</span>
             <Badge variant={plan.id === "FREE" ? "secondary" : "default"}>
-              {plan.label}
+              {planLabel}
             </Badge>
           </Link>
           <Button asChild>
             <Link href="/dashboard/providers">
-              Tambah provider
+              {d.addProvider}
               <ArrowRight />
             </Link>
           </Button>
@@ -137,29 +146,27 @@ export default async function DashboardPage() {
           <AlertDescription>
             {sharedPoolKeys > 0 ? (
               <>
-                Anda belum menambahkan kunci provider sendiri. Request tetap
-                dilayani {formatNumber(sharedPoolKeys)} kunci dari Provider Publik,
-                tetapi kuotanya dipakai bergantian dengan pengguna lain.{" "}
+                {d.noticeWithPool(formatNumber(sharedPoolKeys))}{" "}
                 <Link
                   href="/dashboard/providers"
                   className="font-medium underline underline-offset-4"
                 >
-                  Tambahkan kunci sendiri
+                  {d.noticeWithPoolCta}
                 </Link>{" "}
-                agar kuotanya jadi milik Anda sepenuhnya.
+                {d.noticeWithPoolPost}
               </>
             ) : (
               <>
-                Belum ada kunci provider yang bisa dipakai akun ini, jadi{" "}
-                <code className="font-mono text-xs">/api/v1/chat</code> masih
-                akan membalas 503.{" "}
+                {d.noticeEmptyPre}{" "}
+                <code className="font-mono text-xs">/api/v1/chat</code>{" "}
+                {d.noticeEmptyPost}{" "}
                 <Link
                   href="/dashboard/providers"
                   className="font-medium underline underline-offset-4"
                 >
-                  Tambahkan minimal satu kunci provider
+                  {d.noticeEmptyCta}
                 </Link>{" "}
-                untuk mengaktifkannya.
+                {d.noticeEmptyEnd}
               </>
             )}
           </AlertDescription>
@@ -169,34 +176,37 @@ export default async function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={<Server className="size-4" />}
-          label="Kunci provider Anda"
+          label={d.statKeys}
           value={formatNumber(activeProviders)}
-          hint={
-            sharedPoolKeys > 0
-              ? `aktif dari ${formatNumber(totalProviders)} · +${formatNumber(sharedPoolKeys)} dari Provider Publik`
-              : `aktif dari ${formatNumber(totalProviders)} kunci Anda`
-          }
+          hint={d.statKeysHint(
+            formatNumber(activeProviders),
+            formatNumber(totalProviders),
+            formatNumber(sharedPoolKeys),
+          )}
         />
         <StatCard
           icon={<KeyRound className="size-4" />}
-          label="API key aktif"
+          label={d.statApiKeys}
           value={formatNumber(activeApiKeys)}
-          hint="milik akun Anda"
+          hint={d.statApiKeysHint}
         />
         <StatCard
           icon={<Activity className="size-4" />}
-          label="Request hari ini"
+          label={d.statRequests}
           value={formatNumber(requestsToday)}
-          hint="lewat API key Anda"
+          hint={d.statRequestsHint}
         />
         <StatCard
           icon={<CheckCircle2 className="size-4" />}
-          label="Tingkat sukses"
+          label={d.statSuccess}
           value={successRate === null ? "—" : `${successRate}%`}
           hint={
             successRate === null
-              ? "belum ada request hari ini"
-              : `${formatNumber(successToday)} dari ${formatNumber(requestsToday)} berhasil`
+              ? d.statSuccessNone
+              : d.statSuccessHint(
+                  formatNumber(successToday),
+                  formatNumber(requestsToday),
+                )
           }
         />
       </div>
@@ -206,13 +216,16 @@ export default async function DashboardPage() {
           <TriangleAlert />
           <AlertDescription className="space-y-1">
             <p className="font-medium">
-              {disabledProviders.length} kunci provider Anda sedang nonaktif.
+              {d.disabledTitle(disabledProviders.length)}
             </p>
             <ul className="list-inside list-disc opacity-90">
               {disabledProviders.map((provider) => (
                 <li key={provider.id}>
                   <span className="capitalize">{provider.providerName}</span> —{" "}
-                  {provider.disabledReason ?? "alasan tidak tercatat"}
+                  {describeDisabledReason(
+                    provider.disabledReason,
+                    t.errors.provider,
+                  ) ?? d.disabledUnknown}
                 </li>
               ))}
             </ul>
@@ -222,16 +235,15 @@ export default async function DashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Kunci provider Anda</CardTitle>
+          <CardTitle>{d.yourKeys}</CardTitle>
           <CardDescription>
-            Diurutkan sesuai prioritas eksekusi — yang paling atas dicoba lebih
-            dulu.
+            {d.yourKeysHint}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {recentProviders.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              Anda belum menyumbang kunci provider apa pun.
+              {d.noKeys}
             </p>
           ) : (
             <ul className="divide-y divide-border">
@@ -246,15 +258,15 @@ export default async function DashboardPage() {
                       <Badge
                         variant={provider.isActive ? "success" : "destructive"}
                       >
-                        {provider.isActive ? "Aktif" : "Nonaktif"}
+                        {provider.isActive ? d.active : d.inactive}
                       </Badge>
                     </p>
                     <p className="truncate font-mono text-xs text-muted-foreground">
-                      {provider.modelName ?? "model bawaan preset"}
+                      {provider.modelName ?? d.defaultModel}
                     </p>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <span>Prioritas {provider.priority}</span>
+                    <span>{d.priority} {provider.priority}</span>
                     <span className="text-success">
                       ✓ {formatNumber(provider.successCount)}
                     </span>

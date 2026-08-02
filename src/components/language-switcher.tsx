@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Languages } from "lucide-react";
 
 import { setLocaleAction } from "@/lib/i18n/actions";
+import { useUiCopy } from "@/lib/i18n/client";
 import { LOCALES, type Locale } from "@/lib/i18n/shared";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +17,7 @@ import { cn } from "@/lib/utils";
  * ke peramban, jadi bundel klien tidak ikut membengkak.
  */
 export function LanguageSwitcher({ current }: { current: Locale }) {
+  const ui = useUiCopy();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -31,7 +33,7 @@ export function LanguageSwitcher({ current }: { current: Locale }) {
     <div
       className="flex items-center gap-0.5 rounded-lg border border-border p-0.5"
       role="group"
-      aria-label="Bahasa"
+      aria-label={ui.language}
     >
       <Languages
         className="ml-1.5 size-3.5 shrink-0 text-muted-foreground"

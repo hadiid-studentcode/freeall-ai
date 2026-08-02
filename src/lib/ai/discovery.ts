@@ -5,6 +5,7 @@ import {
   type ProviderFormat,
   type ProviderPreset,
 } from "@/lib/ai/providers";
+import type { Dictionary } from "@/lib/i18n";
 
 /**
  * Deteksi otomatis penyedia dan pemilihan model.
@@ -132,9 +133,12 @@ async function keyIsAccepted(
  * awalannya generik seperti `sk-…` yang dipakai beberapa penyedia — uji
  * endpoint daftar model tiap kandidat sampai ada yang menerima kunci itu.
  */
-export async function detectProvider(apiKey: string): Promise<DetectionResult> {
+export async function detectProvider(
+  apiKey: string,
+  t: Dictionary["errors"]["discovery"],
+): Promise<DetectionResult> {
   const key = apiKey.trim();
-  if (!key) return { ok: false, error: "API key kosong." };
+  if (!key) return { ok: false, error: t.emptyKey };
 
   const byPattern = PROVIDER_PRESETS.find(
     (preset) => preset.keyPattern?.test(key) ?? false,
@@ -145,9 +149,7 @@ export async function detectProvider(apiKey: string): Promise<DetectionResult> {
     if (models === null) {
       return {
         ok: false,
-        error:
-          `Kunci ini dikenali sebagai ${byPattern.label}, tetapi ditolak saat ` +
-          `diuji. Periksa apakah kunci masih aktif.`,
+        error: t.recognizedButRejected(byPattern.label),
       };
     }
     return { ok: true, provider: { preset: byPattern, models } };
@@ -169,9 +171,7 @@ export async function detectProvider(apiKey: string): Promise<DetectionResult> {
 
   return {
     ok: false,
-    error:
-      "Tidak bisa mengenali penyedia dari kunci ini. Pilih penyedianya secara " +
-      "manual, atau gunakan opsi 'Lainnya' dan isi Base URL sendiri.",
+    error: t.unknownProvider,
   };
 }
 

@@ -17,8 +17,24 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { Dictionary } from "@/lib/i18n";
 
-export function ApiKeyForm() {
+// Hanya string biasa yang boleh menyeberang ke Client Component — fungsi
+// pembentuk kalimat (mis. `registered(n)`) tidak bisa diserialisasi React.
+type FormCopy = Pick<
+  Dictionary["dash"]["apiKeys"],
+  | "createTitle"
+  | "createHintPre"
+  | "name"
+  | "namePlaceholder"
+  | "dailyQuota"
+  | "create"
+  | "copyNowTitle"
+  | "copyNowBody"
+  | "copy"
+>;
+
+export function ApiKeyForm({ t }: { t: FormCopy }) {
   const [state, formAction] = useActionState<ActionState, FormData>(
     createApiKeyAction,
     {},
@@ -28,9 +44,9 @@ export function ApiKeyForm() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Buat API key baru</CardTitle>
+        <CardTitle>{t.createTitle}</CardTitle>
         <CardDescription>
-          Kunci ini dipakai aplikasi Anda untuk memanggil{" "}
+          {t.createHintPre}{" "}
           <code className="font-mono text-xs">/api/v1/chat</code>.
         </CardDescription>
       </CardHeader>
@@ -38,17 +54,17 @@ export function ApiKeyForm() {
       <CardContent className="space-y-4">
         <form action={formAction} className="grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end">
           <div className="space-y-2">
-            <Label htmlFor={`${fieldId}-name`}>Nama</Label>
+            <Label htmlFor={`${fieldId}-name`}>{t.name}</Label>
             <Input
               id={`${fieldId}-name`}
               name="name"
-              placeholder="mis. Aplikasi Produksi"
+              placeholder={t.namePlaceholder}
               maxLength={60}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={`${fieldId}-limit`}>Kuota harian</Label>
+            <Label htmlFor={`${fieldId}-limit`}>{t.dailyQuota}</Label>
             <Input
               id={`${fieldId}-limit`}
               name="dailyLimit"
@@ -60,7 +76,7 @@ export function ApiKeyForm() {
             />
           </div>
 
-          <SubmitButton />
+          <SubmitButton label={t.create} />
         </form>
 
         {state.error && (
@@ -75,17 +91,16 @@ export function ApiKeyForm() {
             <TriangleAlert />
             <AlertDescription className="space-y-3">
               <p className="font-medium">
-                Salin sekarang — kunci ini tidak akan ditampilkan lagi.
+                {t.copyNowTitle}
               </p>
               <p className="text-xs opacity-90">
-                Database hanya menyimpan hash-nya, jadi kami sendiri tidak bisa
-                memulihkannya. Kalau hilang, buat kunci baru.
+                {t.copyNowBody}
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <code className="min-w-0 flex-1 overflow-x-auto rounded-md bg-background/60 px-3 py-2 font-mono text-xs">
                   {state.plaintextKey}
                 </code>
-                <CopyButton value={state.plaintextKey} label="Salin" />
+                <CopyButton value={state.plaintextKey} label={t.copy} />
               </div>
             </AlertDescription>
           </Alert>
@@ -95,13 +110,13 @@ export function ApiKeyForm() {
   );
 }
 
-function SubmitButton() {
+function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
 
   return (
     <Button type="submit" disabled={pending}>
       {pending ? <Loader2 className="animate-spin" /> : <Plus />}
-      Buat kunci
+      {label}
     </Button>
   );
 }

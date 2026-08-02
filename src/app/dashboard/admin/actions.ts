@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import type { Plan } from "@/generated/prisma/enums";
 import { requireAdmin } from "@/lib/auth/guard";
 import { PLAN_ORDER } from "@/lib/plans";
+import { getTranslations } from "@/lib/i18n";
 import { assertSafeExternalUrl } from "@/lib/security/url-guard";
 import { prisma } from "@/lib/prisma";
 import {
@@ -170,7 +171,8 @@ export async function createCustomProviderAction(
 
   if (!slug || !label || !baseUrl || !defaultModel) return;
   if (!["openai", "gemini", "anthropic"].includes(format)) return;
-  if (!(await assertSafeExternalUrl(baseUrl)).ok) return;
+  const { t } = await getTranslations();
+  if (!(await assertSafeExternalUrl(baseUrl, t.errors.url)).ok) return;
 
   await prisma.customProvider.upsert({
     where: { slug },

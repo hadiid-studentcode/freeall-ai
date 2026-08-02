@@ -8,6 +8,11 @@
  * - `viewBox` membuatnya menyesuaikan lebar layar tanpa gambar pecah.
  */
 
+import type { Dictionary } from "@/lib/i18n";
+
+/** Teks diagram dioper dari halaman supaya ikut bahasa pilihan pengunjung. */
+type DiagramCopy = Dictionary["docs"]["diagrams"];
+
 const STROKE = "var(--border)";
 const MUTED = "var(--muted-foreground)";
 const FG = "var(--foreground)";
@@ -153,31 +158,28 @@ function Arrow({
 /* -------------------------------------------------------------------------- */
 
 /** Alur satu request dari aplikasi klien sampai kembali membawa jawaban. */
-export function RequestFlowDiagram() {
+export function RequestFlowDiagram({ t }: { t: DiagramCopy }) {
   return (
-    <Frame
-      viewBox="0 0 940 260"
-      label="Alur request dari aplikasi Anda melewati gateway menuju penyedia AI"
-    >
-      <Box x={10} y={40} title="Aplikasi Anda" subtitle="kirim prompt" />
+    <Frame viewBox="0 0 940 260" label={t.flowLabel}>
+      <Box x={10} y={40} title={t.flowApp} subtitle={t.flowAppSub} />
       <Arrow x1={162} y1={69} x2={198} y2={69} />
 
-      <Box x={200} y={40} title="Autentikasi" subtitle="cek API key" />
+      <Box x={200} y={40} title={t.flowAuth} subtitle={t.flowAuthSub} />
       <Arrow x1={352} y1={69} x2={388} y2={69} />
 
-      <Box x={390} y={40} title="Rate limit" subtitle="kuota harian" />
+      <Box x={390} y={40} title={t.flowLimit} subtitle={t.flowLimitSub} />
       <Arrow x1={542} y1={69} x2={578} y2={69} />
 
       <Box
         x={580}
         y={40}
         title="AiManager"
-        subtitle="pilih kunci & model"
+        subtitle={t.flowManagerSub}
         accent
       />
       <Arrow x1={732} y1={69} x2={768} y2={69} />
 
-      <Box x={770} y={40} w={160} title="Penyedia AI" subtitle="Groq, Gemini…" />
+      <Box x={770} y={40} w={160} title={t.flowProvider} subtitle="Groq, Gemini…" />
 
       {/* Jalur balik */}
       <Arrow
@@ -187,7 +189,14 @@ export function RequestFlowDiagram() {
         y2={150}
         color={PRIMARY}
       />
-      <Arrow x1={848} y1={168} x2={168} y2={168} color={PRIMARY} label="jawaban" />
+      <Arrow
+        x1={848}
+        y1={168}
+        x2={168}
+        y2={168}
+        color={PRIMARY}
+        label={t.flowAnswer}
+      />
       <Arrow x1={85} y1={150} x2={85} y2={102} color={PRIMARY} />
 
       {/* Pencatatan */}
@@ -196,7 +205,7 @@ export function RequestFlowDiagram() {
         x={580}
         y={198}
         title="RequestLog"
-        subtitle="riwayat & kuota"
+        subtitle={t.flowLogSub}
         h={50}
       />
     </Frame>
@@ -204,12 +213,9 @@ export function RequestFlowDiagram() {
 }
 
 /** Fallback berlapis: model dulu, baru pindah kunci. */
-export function FallbackDiagram() {
+export function FallbackDiagram({ t }: { t: DiagramCopy }) {
   return (
-    <Frame
-      viewBox="0 0 940 330"
-      label="Fallback berlapis: mencoba model lain pada kunci yang sama sebelum pindah kunci"
-    >
+    <Frame viewBox="0 0 940 330" label={t.fallbackLabel}>
       {/* Kunci 1 */}
       <rect
         x={10}
@@ -222,21 +228,28 @@ export function FallbackDiagram() {
         strokeDasharray="5 5"
       />
       <text x={26} y={34} fontSize="12" fontWeight="600" fill={MUTED}>
-        Kunci #1 — prioritas tertinggi
+        {t.fallbackKey1}
       </text>
 
-      <Box x={30} y={50} w={180} title="Model utama" subtitle="gemini-flash" />
+      <Box x={30} y={50} w={180} title={t.fallbackPrimary} subtitle="gemini-flash" />
       <text x={230} y={75} fontSize="12" fill={DANGER}>
-        429 kuota habis
+        {t.fallbackQuotaGone}
       </text>
       <Arrow x1={120} y1={110} x2={120} y2={144} color={DANGER} />
 
-      <Box x={30} y={146} w={180} title="Model cadangan" subtitle="flash-lite" />
+      <Box x={30} y={146} w={180} title={t.fallbackBackup} subtitle="flash-lite" />
       <text x={230} y={172} fontSize="12" fill={DANGER}>
-        429 kuota habis
+        {t.fallbackQuotaGone}
       </text>
 
-      <Arrow x1={225} y1={175} x2={480} y2={175} color={MUTED} label="pindah kunci" />
+      <Arrow
+        x1={225}
+        y1={175}
+        x2={480}
+        y2={175}
+        color={MUTED}
+        label={t.fallbackSwitchKey}
+      />
 
       {/* Kunci 2 */}
       <rect
@@ -250,19 +263,19 @@ export function FallbackDiagram() {
         strokeDasharray="5 5"
       />
       <text x={506} y={34} fontSize="12" fontWeight="600" fill={MUTED}>
-        Kunci #2 — prioritas berikutnya
+        {t.fallbackKey2}
       </text>
 
       <Box
         x={510}
         y={146}
         w={180}
-        title="Model utama"
+        title={t.fallbackPrimary}
         subtitle="llama-3.1-8b"
         accent
       />
       <text x={710} y={172} fontSize="12" fill={PRIMARY}>
-        200 berhasil
+        {t.fallbackSuccess}
       </text>
 
       <Arrow x1={600} y1={210} x2={600} y2={258} color={PRIMARY} />
@@ -271,7 +284,7 @@ export function FallbackDiagram() {
         y={260}
         w={260}
         h={50}
-        title="Jawaban dikirim ke aplikasi"
+        title={t.fallbackDelivered}
         subtitle="attempts: 3"
         accent
       />
@@ -280,42 +293,45 @@ export function FallbackDiagram() {
 }
 
 /** Siapa boleh memakai kunci siapa. */
-export function KeyScopeDiagram() {
+export function KeyScopeDiagram({ t }: { t: DiagramCopy }) {
   return (
-    <Frame
-      viewBox="0 0 940 260"
-      label="Kunci pribadi hanya dipakai pemiliknya; Provider Publik dipakai semua orang"
-    >
-      <Box x={10} y={30} w={170} title="User A" subtitle="punya kunci sendiri" />
-      <Box x={10} y={150} w={170} title="Pengunjung" subtitle="demo, tanpa akun" />
+    <Frame viewBox="0 0 940 260" label={t.scopeLabel}>
+      <Box x={10} y={30} w={170} title={t.scopeUserA} subtitle={t.scopeUserASub} />
+      <Box
+        x={10}
+        y={150}
+        w={170}
+        title={t.scopeVisitor}
+        subtitle={t.scopeVisitorSub}
+      />
 
-      <Arrow x1={182} y1={59} x2={318} y2={59} label="dicoba lebih dulu" />
+      <Arrow x1={182} y1={59} x2={318} y2={59} label={t.scopeTriedFirst} />
       <Box
         x={320}
         y={30}
         w={200}
-        title="Kunci pribadi A"
-        subtitle="hanya untuk User A"
+        title={t.scopePrivateKey}
+        subtitle={t.scopePrivateKeySub}
         accent
       />
 
-      <Arrow x1={522} y1={59} x2={658} y2={70} label="kalau habis" />
-      <Arrow x1={182} y1={172} x2={658} y2={110} label="hanya ini" />
+      <Arrow x1={522} y1={59} x2={658} y2={70} label={t.scopeWhenExhausted} />
+      <Arrow x1={182} y1={172} x2={658} y2={110} label={t.scopeOnlyThis} />
 
       <Box
         x={660}
         y={60}
         w={260}
         h={70}
-        title="Provider Publik"
-        subtitle="dikelola admin · dipakai bersama"
+        title={t.scopePublic}
+        subtitle={t.scopePublicSub}
       />
 
       <text x={320} y={185} fontSize="12" fill={MUTED}>
-        Kunci pribadi milik user lain tidak pernah tersentuh
+        {t.scopeNote1}
       </text>
       <text x={320} y={205} fontSize="12" fill={MUTED}>
-        oleh pengunjung demo maupun user lain.
+        {t.scopeNote2}
       </text>
     </Frame>
   );

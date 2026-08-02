@@ -13,6 +13,7 @@ import {
   getClientIp,
   peekIpRateLimit,
 } from "@/lib/rate-limit";
+import { getTranslations } from "@/lib/i18n";
 
 export const runtime = "nodejs";
 
@@ -23,9 +24,14 @@ export const runtime = "nodejs";
  * jumlah token dibatasi, dan hanya menerima satu prompt (bukan riwayat panjang).
  */
 export async function POST(request: Request) {
+  // Dipanggil peramban, jadi cookie bahasa ikut terkirim dan pesan error
+  // bisa mengikuti bahasa pengunjung.
+  const { t } = await getTranslations();
+  const d = t.errors.demo;
+
   // Pagar total lebih dulu: inilah yang melindungi biaya operator dari
   // banyak IP berbeda, sesuatu yang tidak bisa dilakukan batas per-IP.
-  const globalQuota = await checkDemoGlobalQuota();
+  const globalQuota = await checkDemoGlobalQuota(d.globalQuota);
   if (!globalQuota.allowed) {
     return NextResponse.json(
       { success: false, error: globalQuota.reason },
@@ -46,11 +52,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        error:
-          `Kuota demo habis — ini batas dari gateway ini sendiri (bukan dari penyedia AI), ` +
-          `${demoLimitPerHour} percakapan per jam per pengunjung, untuk menjaga kunci provider ` +
-          `tidak terkuras. Coba lagi dalam ${minutes} menit, atau daftar gratis untuk ` +
-          `mendapat API key dengan kuota harian sendiri.`,
+        error: d.hourlyLimit(demoLimitPerHour ?? 0, minutes),
       },
       {
         status: 429,
@@ -64,7 +66,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   if (body === null) {
     return NextResponse.json(
-      { success: false, error: "Body request bukan JSON yang valid." },
+      { success: false, error: d.invalidJson },
       { status: 400 },
     );
   }
@@ -101,19 +103,24 @@ export async function POST(request: Request) {
       remaining: spent.remaining,
     });
   } catch (error) {
-    if (
-      error instanceof NoProviderAvailableError ||
-      error instanceof AllProvidersFailedError
-    ) {
+    // Pesan kelas error milik AiManager dipakai bersama `/api/v1/chat` yang
+    // machine-facing, jadi di sini dipetakan ke kalimat yang sudah dwibahasa.
+    if (error instanceof NoProviderAvailableError) {
       return NextResponse.json(
-        { success: false, error: error.message },
+        { success: false, error: d.noProvider },
+        { status: 503 },
+      );
+    }
+    if (error instanceof AllProvidersFailedError) {
+      return NextResponse.json(
+        { success: false, error: d.allFailed },
         { status: 503 },
       );
     }
 
     console.error("[/api/demo/chat] kesalahan tak terduga:", error);
     return NextResponse.json(
-      { success: false, error: "Terjadi kesalahan internal." },
+      { success: false, error: d.internal },
       { status: 500 },
     );
   }

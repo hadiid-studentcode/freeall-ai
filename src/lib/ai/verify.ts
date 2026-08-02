@@ -1,5 +1,6 @@
 import { AiFactory, ProviderConfigError } from "@/lib/ai/factory/ai-factory";
 import { AiProviderError } from "@/lib/ai/interfaces/ai-strategy.interface";
+import type { Dictionary } from "@/lib/i18n";
 
 export type VerifyOutcome =
   | { status: "ok"; model: string }
@@ -17,13 +18,16 @@ const VERIFY_TIMEOUT_MS = 20_000;
  * ketahuan saat request produksi gagal — persis kelas masalah yang membuat
  * `gemini-2.0-flash` diam-diam membalas 429 (limit: 0).
  */
-export async function verifyProviderKey(config: {
-  providerName: string;
-  keyCiphertext: string;
-  format: string;
-  baseUrl: string | null;
-  modelName: string | null;
-}): Promise<VerifyOutcome> {
+export async function verifyProviderKey(
+  config: {
+    providerName: string;
+    keyCiphertext: string;
+    format: string;
+    baseUrl: string | null;
+    modelName: string | null;
+  },
+  t: Dictionary["errors"]["verify"],
+): Promise<VerifyOutcome> {
   let strategy;
   try {
     strategy = AiFactory.create(config);
@@ -33,7 +37,7 @@ export async function verifyProviderKey(config: {
       message:
         error instanceof ProviderConfigError
           ? error.message
-          : "Konfigurasi provider tidak valid.",
+          : t.invalidConfig,
       httpStatus: null,
     };
   }
@@ -49,8 +53,7 @@ export async function verifyProviderKey(config: {
     if (!(error instanceof AiProviderError)) {
       return {
         status: "transient",
-        message:
-          error instanceof Error ? error.message : "Kesalahan tidak dikenal.",
+        message: error instanceof Error ? error.message : t.unknownError,
         httpStatus: null,
       };
     }

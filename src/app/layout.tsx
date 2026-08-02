@@ -3,6 +3,9 @@ import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+import { getLocale, getTranslations } from "@/lib/i18n";
+import { LocaleProvider } from "@/lib/i18n/client";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -13,14 +16,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: "FreeAll AI — Routing AI tanpa batas",
-    template: "%s",
-  },
-  description:
-    "API Gateway dengan sistem fallback cerdas. Satukan API key gratisan Anda dari Groq, Gemini, Claude, dan puluhan penyedia lain dalam satu endpoint.",
-};
+// Judul dan deskripsi ikut bahasa pilihan pengunjung, jadi dipakai
+// generateMetadata (async) alih-alih objek metadata statis.
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getTranslations();
+  return {
+    title: { default: t.home.metaTitle, template: "%s" },
+    description: t.home.metaDescription,
+  };
+}
 
 /**
  * Memasang tema sebelum halaman digambar.
@@ -32,14 +36,18 @@ export const metadata: Metadata = {
  */
 const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem('freeall-theme')||'system';var d=t==='dark'||(t==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d)}catch(e){document.documentElement.classList.add('dark')}})()`;
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Atribut lang penting untuk pembaca layar dan mesin telusur, jadi harus
+  // ikut bahasa yang dipilih pengunjung.
+  const locale = await getLocale();
+
   return (
     <html
-      lang="id"
+      lang={locale}
       className={`${geistSans.variable} ${geistMono.variable} h-full`}
       // Kelas `dark` dipasang skrip di atas sebelum React berjalan, sehingga
       // markup server dan klien memang berbeda di sini — dan itu disengaja.
@@ -49,7 +57,7 @@ export default function RootLayout({
         <Script id="theme-init" strategy="beforeInteractive">
           {THEME_SCRIPT}
         </Script>
-        {children}
+        <LocaleProvider value={locale}>{children}</LocaleProvider>
       </body>
     </html>
   );

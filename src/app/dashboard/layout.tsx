@@ -3,11 +3,13 @@ import type { ReactNode } from "react";
 import { LogOut, Zap } from "lucide-react";
 
 import { DashboardNav } from "@/app/dashboard/nav";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/lib/auth/actions";
 import { requireUser } from "@/lib/auth/guard";
+import { getTranslations } from "@/lib/i18n";
 
 export default async function DashboardLayout({
   children,
@@ -17,6 +19,7 @@ export default async function DashboardLayout({
   // Layout hanya penjaga lapis pertama; tiap page dan Server Action tetap
   // memanggil requireUser() sendiri karena bisa diakses tanpa lewat sini.
   const user = await requireUser();
+  const { locale, t } = await getTranslations();
 
   return (
     <div className="min-h-screen">
@@ -34,17 +37,18 @@ export default async function DashboardLayout({
               {user.name ?? user.email}
             </span>
             {user.role === "ADMIN" && <Badge variant="default">Admin</Badge>}
+            <LanguageSwitcher current={locale} />
             <ThemeToggle />
             <form action={logoutAction}>
               <Button type="submit" variant="ghost" size="sm">
                 <LogOut />
-                <span className="hidden sm:inline">Keluar</span>
+                <span className="hidden sm:inline">{t.dash.logout}</span>
               </Button>
             </form>
           </div>
         </div>
 
-        <DashboardNav isAdmin={user.role === "ADMIN"} />
+        <DashboardNav isAdmin={user.role === "ADMIN"} t={t.dash.nav} />
       </header>
 
       <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">

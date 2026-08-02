@@ -235,7 +235,9 @@ export function consumeIpRateLimit(ip: string): RateLimitResult {
  * biaya operator dan harus tetap akurat walau aplikasi berjalan di banyak
  * instance sekaligus.
  */
-export async function checkDemoGlobalQuota(): Promise<RateLimitResult> {
+export async function checkDemoGlobalQuota(
+  exhaustedMessage: string,
+): Promise<RateLimitResult> {
   const limit = await getDemoGlobalDailyLimit();
   if (limit === 0) {
     return {
@@ -259,9 +261,7 @@ export async function checkDemoGlobalQuota(): Promise<RateLimitResult> {
       allowed: false,
       remaining: 0,
       retryAfterSeconds: Math.ceil((nextMidnight.getTime() - Date.now()) / 1000),
-      reason:
-        "Kuota demo harian untuk seluruh pengunjung sudah habis. " +
-        "Daftar gratis untuk memakai gateway dengan kuota Anda sendiri.",
+      reason: exhaustedMessage,
     };
   }
 

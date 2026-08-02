@@ -11,14 +11,16 @@ import type { Plan, Role } from "@/generated/prisma/enums";
  * Fitur inti — fallback, deteksi otomatis penyedia, enkripsi kunci — sengaja
  * TIDAK dibatasi. Melumpuhkannya di paket gratis hanya membuat orang memilih
  * self-host, dan justru menghilangkan calon pelanggan.
+ *
+ * Berkas ini hanya memuat angka. Nama paket, tagline, dan daftar fiturnya ada
+ * di kamus bahasa (`t.plans`) supaya ikut dwibahasa — menyalinnya ke sini
+ * hanya akan menghasilkan dua sumber kebenaran yang diam-diam berbeda.
  */
 
 export interface PlanLimits {
   id: Plan;
-  label: string;
   /** Harga per bulan dalam rupiah. 0 = gratis. */
   pricePerMonth: number;
-  tagline: string;
   /** Maksimal API key aktif yang bisa dibuat. */
   maxApiKeys: number;
   /**
@@ -33,60 +35,33 @@ export interface PlanLimits {
   burstPerMinute: number;
   /** Ditonjolkan di halaman harga. */
   highlight?: boolean;
-  features: string[];
 }
 
 export const PLANS: Record<Plan, PlanLimits> = {
   FREE: {
     id: "FREE",
-    label: "Gratis",
     pricePerMonth: 0,
-    tagline: "Untuk mencoba dan proyek pribadi.",
     maxApiKeys: 2,
     publicDailyLimit: 50,
     logRetentionDays: 7,
     burstPerMinute: 20,
-    features: [
-      "Bawa API key sendiri tanpa batas jumlah",
-      "Fallback antar model dan kunci",
-      "Deteksi penyedia otomatis",
-      "Riwayat 7 hari terakhir",
-    ],
   },
   PRO: {
     id: "PRO",
-    label: "Pro",
     pricePerMonth: 49_000,
-    tagline: "Untuk aplikasi yang sudah dipakai orang.",
     maxApiKeys: 10,
     publicDailyLimit: 2_000,
     logRetentionDays: 90,
     burstPerMinute: 60,
     highlight: true,
-    features: [
-      "Semua yang ada di paket Gratis",
-      "2.000 request/hari dari Provider Publik",
-      "10 API key untuk memisahkan tiap aplikasi",
-      "Riwayat 90 hari",
-      "Batas lonjakan 3× lebih longgar",
-    ],
   },
   TEAM: {
     id: "TEAM",
-    label: "Team",
     pricePerMonth: 199_000,
-    tagline: "Untuk tim yang butuh kapasitas dan jejak audit.",
     maxApiKeys: 50,
     publicDailyLimit: 10_000,
     logRetentionDays: 365,
     burstPerMinute: 120,
-    features: [
-      "Semua yang ada di paket Pro",
-      "10.000 request/hari dari Provider Publik",
-      "50 API key",
-      "Riwayat 1 tahun untuk keperluan audit",
-      "Dukungan prioritas",
-    ],
   },
 };
 
@@ -102,16 +77,13 @@ export const PLAN_ORDER: Plan[] = ["FREE", "PRO", "TEAM"];
  */
 export const ADMIN_PLAN: PlanLimits = {
   id: "TEAM",
-  label: "Admin",
   pricePerMonth: 0,
-  tagline: "Akses penuh sebagai pengelola instance.",
   // Angka besar tapi terbatas, bukan Infinity — supaya tetap aman dipakai
   // pada perhitungan persentase dan atribut `max` di formulir.
   maxApiKeys: 1_000,
   publicDailyLimit: 1_000_000,
   logRetentionDays: 3_650,
   burstPerMinute: 600,
-  features: ["Tanpa batas paket", "Kelola Provider Publik", "Kelola pengguna"],
 };
 
 /**

@@ -21,15 +21,21 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/guard";
+import { getTranslations } from "@/lib/i18n";
 import { formatPrice, PLAN_ORDER, PLANS, resolvePlan } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { getPublicDailyLimit } from "@/lib/settings";
 import { formatDateTime, formatNumber } from "@/lib/utils";
 
-export const metadata = { title: "Paket & Kuota · FreeAll AI" };
+export async function generateMetadata() {
+  const { t } = await getTranslations();
+  return { title: `${t.dash.plan.title} · FreeAll AI` };
+}
 
 export default async function PlanPage() {
   const user = await requireUser();
+  const { t } = await getTranslations();
+  const d = t.dash.plan;
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -49,6 +55,11 @@ export default async function PlanPage() {
     ]);
 
   const plan = resolvePlan(account);
+  // Angka batas dari plans.ts; nama dan taglinenya dari kamus bahasa.
+  const copy =
+    account.role === "ADMIN"
+      ? { label: d.adminLabel, tagline: d.adminTagline }
+      : t.plans[plan.id];
   const isPaid = plan.pricePerMonth > 0;
 
   // Kuota publik hanya menggigit kalau user belum membawa kunci sendiri.
@@ -70,16 +81,15 @@ export default async function PlanPage() {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Paket &amp; Kuota
+            {d.title}
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Batas yang berlaku untuk akun Anda dan seberapa banyak yang sudah
-            terpakai hari ini.
+            {d.subtitle}
           </p>
         </div>
         <Button asChild variant="outline">
           <Link href="/pricing">
-            Bandingkan paket
+            {d.compare}
             <ArrowRight />
           </Link>
         </Button>
@@ -89,10 +99,7 @@ export default async function PlanPage() {
         <Alert variant="warning">
           <Clock />
           <AlertDescription>
-            Paket <strong>{plan.label}</strong> Anda berakhir dalam {daysLeft}{" "}
-            hari ({formatDateTime(account.planExpiresAt)}). Setelah itu akun
-            kembali ke paket Gratis — kunci provider dan API key Anda tidak
-            dihapus.
+            {d.expiring(daysLeft ?? 0, formatDateTime(account.planExpiresAt))}
           </AlertDescription>
         </Alert>
       )}
@@ -107,10 +114,10 @@ export default async function PlanPage() {
               </span>
               <div>
                 <CardTitle className="flex items-center gap-2 text-xl">
-                  Paket {plan.label}
-                  {isPaid && <Badge>Aktif</Badge>}
+                  {d.planPrefix} {copy.label}
+                  {isPaid && <Badge>{d.activeBadge}</Badge>}
                 </CardTitle>
-                <CardDescription>{plan.tagline}</CardDescription>
+                <CardDescription>{copy.tagline}</CardDescription>
               </div>
             </div>
             <p className="text-right">
@@ -118,7 +125,7 @@ export default async function PlanPage() {
                 {formatPrice(plan.pricePerMonth)}
               </span>
               {isPaid && (
-                <span className="text-sm text-muted-foreground"> / bulan</span>
+                <span className="text-sm text-muted-foreground"> {d.perMonth}</span>
               )}
             </p>
           </div>
@@ -128,20 +135,26 @@ export default async function PlanPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <Meter
               icon={<KeyRound className="size-4" />}
-              label="API key"
+              label={d.meterApiKeys}
               used={apiKeyCount}
               limit={plan.maxApiKeys}
-              hint={`${formatNumber(apiKeyCount)} dari ${formatNumber(plan.maxApiKeys)} terpakai`}
+              hint={d.meterApiKeysHint(
+                formatNumber(apiKeyCount),
+                formatNumber(plan.maxApiKeys),
+              )}
             />
             <Meter
               icon={<Gauge className="size-4" />}
-              label="Kuota Provider Publik hari ini"
+              label={d.meterPublic}
               used={usesPublicPool ? requestsToday : 0}
               limit={effectivePublicLimit}
               hint={
                 usesPublicPool
-                  ? `${formatNumber(requestsToday)} dari ${formatNumber(effectivePublicLimit)} terpakai`
-                  : "Tidak berlaku — Anda memakai kunci sendiri"
+                  ? d.meterApiKeysHint(
+                      formatNumber(requestsToday),
+                      formatNumber(effectivePublicLimit),
+                    )
+                  : d.meterPublicNa
               }
               inactive={!usesPublicPool}
             />
@@ -150,13 +163,13 @@ export default async function PlanPage() {
           <div className="grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
             <Fact
               icon={<ScrollText className="size-4" />}
-              label="Riwayat tersimpan"
-              value={`${formatNumber(plan.logRetentionDays)} hari`}
+              label={d.factHistory}
+              value={`${formatNumber(plan.logRetentionDays)} ${d.days}`}
             />
             <Fact
               icon={<Gauge className="size-4" />}
-              label="Batas lonjakan"
-              value={`${formatNumber(plan.burstPerMinute)} request / menit`}
+              label={d.factBurst}
+              value={`${formatNumber(plan.burstPerMinute)} ${d.perMinute}`}
             />
           </div>
 
@@ -164,24 +177,23 @@ export default async function PlanPage() {
             <Alert>
               <TriangleAlert />
               <AlertDescription>
-                Anda memakai <strong>Provider Publik</strong> — kunci milik
-                operator, yang dibagi dengan pengguna lain.{" "}
+                {d.usingPoolPre} <strong>{d.usingPoolBold}</strong>{" "}
+                {d.usingPoolMid}{" "}
                 <Link
                   href="/dashboard/providers"
                   className="font-medium underline underline-offset-4"
                 >
-                  Tambahkan kunci provider sendiri
+                  {d.usingPoolCta}
                 </Link>{" "}
-                dan batas harian ini lepas sepenuhnya, berapa pun paket Anda.
+                {d.usingPoolPost}
               </AlertDescription>
             </Alert>
           ) : (
             <Alert variant="success">
               <Check />
               <AlertDescription>
-                Anda memakai kunci provider sendiri ({ownProviderKeys} kunci
-                aktif), jadi <strong>tidak ada batas kuota harian</strong> dari
-                kami. Yang berlaku hanya kuota dari penyedia AI masing-masing.
+                {d.ownKeysPre(ownProviderKeys)}{" "}
+                <strong>{d.ownKeysBold}</strong> {d.ownKeysPost}
               </AlertDescription>
             </Alert>
           )}
@@ -191,7 +203,7 @@ export default async function PlanPage() {
       {/* Perbandingan paket lain */}
       <div>
         <h2 className="text-lg font-semibold tracking-tight">
-          Paket yang tersedia
+          {d.availableTitle}
         </h2>
         <div className="mt-4 grid gap-4 lg:grid-cols-3">
           {PLAN_ORDER.map((id) => {
@@ -205,8 +217,10 @@ export default async function PlanPage() {
               >
                 <CardHeader>
                   <div className="flex items-center justify-between gap-2">
-                    <CardTitle className="text-base">{other.label}</CardTitle>
-                    {isCurrent && <Badge variant="secondary">Paket Anda</Badge>}
+                    <CardTitle className="text-base">{t.plans[id].label}</CardTitle>
+                    {isCurrent && (
+                      <Badge variant="secondary">{d.yourPlan}</Badge>
+                    )}
                   </div>
                   <p>
                     <span className="text-xl font-semibold tabular-nums">
@@ -222,17 +236,20 @@ export default async function PlanPage() {
                 </CardHeader>
                 <CardContent className="space-y-1.5 text-xs">
                   <Row
-                    label="Provider Publik"
-                    value={`${formatNumber(other.publicDailyLimit)} / hari`}
-                  />
-                  <Row label="API key" value={formatNumber(other.maxApiKeys)} />
-                  <Row
-                    label="Riwayat"
-                    value={`${formatNumber(other.logRetentionDays)} hari`}
+                    label={d.rowPublic}
+                    value={`${formatNumber(other.publicDailyLimit)} ${d.perDay}`}
                   />
                   <Row
-                    label="Lonjakan"
-                    value={`${formatNumber(other.burstPerMinute)} / menit`}
+                    label={d.rowApiKeys}
+                    value={formatNumber(other.maxApiKeys)}
+                  />
+                  <Row
+                    label={d.rowHistory}
+                    value={`${formatNumber(other.logRetentionDays)} ${d.days}`}
+                  />
+                  <Row
+                    label={d.rowBurst}
+                    value={`${formatNumber(other.burstPerMinute)} ${d.perMinute}`}
                   />
                 </CardContent>
               </Card>
@@ -245,12 +262,10 @@ export default async function PlanPage() {
         <CardContent className="flex flex-wrap items-center gap-4 p-6">
           <Sparkles className="size-5 shrink-0 text-primary" />
           <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-            Pembayaran otomatis belum tersambung. Peningkatan paket diaktifkan
-            manual oleh admin setelah konfirmasi — hubungi admin instance ini
-            untuk naik ke Pro atau Team.
+            {d.manualNote}
           </p>
           <Button asChild variant="outline" size="sm">
-            <Link href="/pricing">Lihat harga</Link>
+            <Link href="/pricing">{d.seePricing}</Link>
           </Button>
         </CardContent>
       </Card>

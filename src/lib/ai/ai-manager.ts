@@ -4,6 +4,7 @@ import {
   type ChatMessage,
   type ChatResult,
 } from "@/lib/ai/interfaces/ai-strategy.interface";
+import { disabledRejectedCode } from "@/lib/providers/disabled-reason";
 import { prisma } from "@/lib/prisma";
 
 /** Batas waktu satu provider sebelum dianggap gagal dan dilewati. */
@@ -297,7 +298,7 @@ export class AiManager {
         where: { id: providerKeyId },
         data: {
           isActive: false,
-          disabledReason: `Ditolak provider (HTTP ${providerError.status})`,
+          disabledReason: disabledRejectedCode(providerError.status ?? null),
           errorCount: { increment: 1 },
           lastError: message,
           lastErrorAt: new Date(),

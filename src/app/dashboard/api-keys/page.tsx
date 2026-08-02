@@ -25,13 +25,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { requireUser } from "@/lib/auth/guard";
+import { getTranslations } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime, formatNumber, formatRelative } from "@/lib/utils";
 
-export const metadata = { title: "API Key · FreeAll AI" };
+export async function generateMetadata() {
+  const { t } = await getTranslations();
+  return { title: `${t.dash.apiKeys.title} · FreeAll AI` };
+}
 
 export default async function ApiKeysPage() {
   const user = await requireUser();
+  const { t } = await getTranslations();
+  const d = t.dash.apiKeys;
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -57,45 +63,53 @@ export default async function ApiKeysPage() {
     <div className="space-y-8">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          API Key
+          {d.title}
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Kunci otorisasi untuk memakai gateway FreeAll AI dari aplikasi Anda
-          sendiri. <strong>Kuota harian</strong> adalah rem pemakaian: begitu
-          jumlah request hari ini menyentuh angka itu, endpoint membalas 429
-          sampai tengah malam — berguna agar satu aplikasi tidak menghabiskan
-          seluruh kunci provider. Bisa diubah kapan saja.
+          {d.subtitlePre} <strong>{d.subtitleBold}</strong> {d.subtitlePost}
         </p>
       </header>
 
-      <ApiKeyForm />
+      <ApiKeyForm
+        t={{
+          createTitle: d.createTitle,
+          createHintPre: d.createHintPre,
+          name: d.name,
+          namePlaceholder: d.namePlaceholder,
+          dailyQuota: d.dailyQuota,
+          create: d.create,
+          copyNowTitle: d.copyNowTitle,
+          copyNowBody: d.copyNowBody,
+          copy: d.copy,
+        }}
+      />
 
       <Card>
         <CardHeader>
-          <CardTitle>Kunci Anda</CardTitle>
+          <CardTitle>{d.yourKeys}</CardTitle>
           <CardDescription>
             {apiKeys.length === 0
-              ? "Belum ada kunci."
-              : `${apiKeys.length} kunci terdaftar.`}
+              ? d.noKeys
+              : d.registered(apiKeys.length)}
           </CardDescription>
         </CardHeader>
 
         <CardContent className="px-0 sm:px-6">
           {apiKeys.length === 0 ? (
             <p className="px-6 py-8 text-center text-sm text-muted-foreground sm:px-0">
-              Buat kunci pertama Anda lewat formulir di atas.
+              {d.empty}
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nama</TableHead>
-                  <TableHead>Kunci</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Pemakaian hari ini</TableHead>
-                  <TableHead>Terakhir dipakai</TableHead>
-                  <TableHead>Dibuat</TableHead>
-                  <TableHead className="text-right">Aksi</TableHead>
+                  <TableHead>{d.colName}</TableHead>
+                  <TableHead>{d.colKey}</TableHead>
+                  <TableHead>{d.colStatus}</TableHead>
+                  <TableHead>{d.colUsage}</TableHead>
+                  <TableHead>{d.colLastUsed}</TableHead>
+                  <TableHead>{d.colCreated}</TableHead>
+                  <TableHead className="text-right">{d.colActions}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -117,7 +131,7 @@ export default async function ApiKeysPage() {
                         <Badge
                           variant={apiKey.isActive ? "success" : "secondary"}
                         >
-                          {apiKey.isActive ? "Aktif" : "Nonaktif"}
+                          {apiKey.isActive ? d.active : d.inactive}
                         </Badge>
                       </TableCell>
 
@@ -145,10 +159,10 @@ export default async function ApiKeysPage() {
                               max={100000}
                               defaultValue={apiKey.dailyLimit}
                               className="h-7 w-20 px-2 text-xs"
-                              aria-label={`Kuota harian ${apiKey.name}`}
+                              aria-label={`${d.dailyQuota} ${apiKey.name}`}
                             />
                             <Button type="submit" variant="ghost" size="sm">
-                              Simpan
+                              {d.save}
                             </Button>
                           </form>
                         </div>
@@ -178,9 +192,7 @@ export default async function ApiKeysPage() {
                               type="submit"
                               variant="ghost"
                               size="icon"
-                              title={
-                                apiKey.isActive ? "Nonaktifkan" : "Aktifkan"
-                              }
+                              title={apiKey.isActive ? d.disable : d.enable}
                             >
                               <Power
                                 className={
@@ -198,7 +210,7 @@ export default async function ApiKeysPage() {
                               type="submit"
                               variant="ghost"
                               size="icon"
-                              title="Hapus kunci"
+                              title={d.remove}
                             >
                               <Trash2 className="text-destructive" />
                             </Button>

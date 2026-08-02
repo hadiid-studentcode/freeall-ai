@@ -15,16 +15,22 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { requireUser } from "@/lib/auth/guard";
+import { getTranslations } from "@/lib/i18n";
 import { resolvePlan } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime, formatNumber } from "@/lib/utils";
 
-export const metadata = { title: "Riwayat · FreeAll AI" };
+export async function generateMetadata() {
+  const { t } = await getTranslations();
+  return { title: `${t.dash.logs.title} · FreeAll AI` };
+}
 
 const PAGE_SIZE = 50;
 
 export default async function LogsPage() {
   const user = await requireUser();
+  const { t } = await getTranslations();
+  const d = t.dash.logs;
 
   // Log milik API key user ini saja.
   //
@@ -73,48 +79,44 @@ export default async function LogsPage() {
     <div className="space-y-8">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          Riwayat request
+          {d.title}
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Kolom <strong>Percobaan</strong> menunjukkan berapa kombinasi kunci dan
-          model yang dilalui sebelum request selesai — angka di atas 1 berarti
-          fallback bekerja.{" "}
-          {isAdmin
-            ? "Sebagai admin, percakapan lewat demo halaman depan ikut tampil dengan tanda Demo."
-            : "Hanya request lewat API key Anda yang tampil di sini."}{" "}
-          Paket <strong>{plan.label}</strong> menampilkan riwayat{" "}
-          {plan.logRetentionDays} hari terakhir.
+          {d.subtitlePre} <strong>{d.subtitleBold}</strong> {d.subtitleMid}{" "}
+          {isAdmin ? d.subtitleAdmin : d.subtitleUser}{" "}
+          {d.retention(
+            isAdmin ? t.dash.plan.adminLabel : t.plans[plan.id].label,
+            String(plan.logRetentionDays),
+          )}
         </p>
       </header>
 
       <Card>
         <CardHeader>
-          <CardTitle>{PAGE_SIZE} request terakhir</CardTitle>
+          <CardTitle>{d.lastN(PAGE_SIZE)}</CardTitle>
           <CardDescription>
-            {logs.length === 0
-              ? "Belum ada request yang tercatat."
-              : `Menampilkan ${logs.length} entri terbaru.`}
+            {logs.length === 0 ? d.none : d.showing(logs.length)}
           </CardDescription>
         </CardHeader>
 
         <CardContent className="px-0 sm:px-6">
           {logs.length === 0 ? (
             <p className="px-6 py-8 text-center text-sm text-muted-foreground sm:px-0">
-              Kirim request pertama ke{" "}
-              <code className="font-mono text-xs">/api/v1/chat</code> untuk
-              melihat riwayatnya di sini.
+              {d.emptyPre}{" "}
+              <code className="font-mono text-xs">/api/v1/chat</code>{" "}
+              {d.emptyPost}
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Waktu</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>Model</TableHead>
-                  <TableHead>Percobaan</TableHead>
-                  <TableHead>Latensi</TableHead>
-                  <TableHead>Sumber</TableHead>
+                  <TableHead>{d.colTime}</TableHead>
+                  <TableHead>{d.colStatus}</TableHead>
+                  <TableHead>{d.colProvider}</TableHead>
+                  <TableHead>{d.colModel}</TableHead>
+                  <TableHead>{d.colAttempts}</TableHead>
+                  <TableHead>{d.colLatency}</TableHead>
+                  <TableHead>{d.colSource}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -130,8 +132,8 @@ export default async function LogsPage() {
                         title={log.errorMessage ?? undefined}
                       >
                         {log.success
-                          ? "Sukses"
-                          : `Gagal${log.statusCode ? ` ${log.statusCode}` : ""}`}
+                          ? d.success
+                          : `${d.failed}${log.statusCode ? ` ${log.statusCode}` : ""}`}
                       </Badge>
                       {!log.success && log.errorMessage && (
                         <p className="mt-1 max-w-[16rem] truncate text-xs text-muted-foreground">
@@ -166,7 +168,7 @@ export default async function LogsPage() {
 
                     <TableCell className="text-xs">
                       {log.source === "demo" ? (
-                        <Badge variant="outline">Demo</Badge>
+                        <Badge variant="outline">{d.demo}</Badge>
                       ) : (
                         <span className="text-muted-foreground">
                           {log.apiKey?.name ?? "API"}

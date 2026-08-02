@@ -18,16 +18,19 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import type { ProviderPreset } from "@/lib/ai/providers";
+import type { ProviderOption } from "@/lib/ai/catalog";
+import type { Dictionary } from "@/lib/i18n";
 
 const AUTO = "auto";
 
 export function ProviderForm({
   isAdmin,
   presets,
+  t,
 }: {
   isAdmin: boolean;
-  presets: ProviderPreset[];
+  presets: ProviderOption[];
+  t: Dictionary["dash"]["providerForm"];
 }) {
   const [state, formAction] = useActionState<ActionState, FormData>(
     createProviderKeyAction,
@@ -43,37 +46,34 @@ export function ProviderForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Tambah kunci provider</CardTitle>
+        <CardTitle>{t.title}</CardTitle>
         <CardDescription>
-          Tempel API key Anda — sistem mengenali penyedianya sendiri, mencari
-          model yang masih aktif, lalu mengujinya. Kunci dienkripsi AES-256-GCM
-          sebelum disimpan dan tidak pernah ditampilkan ulang secara utuh.
+          {t.description}
         </CardDescription>
       </CardHeader>
 
       <CardContent>
         <form action={formAction} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor={`${fieldId}-key`}>API key</Label>
+            <Label htmlFor={`${fieldId}-key`}>{t.apiKey}</Label>
             <Input
               id={`${fieldId}-key`}
               name="key"
               type="password"
               required
               autoComplete="off"
-              placeholder="Tempel API key dari penyedia mana pun"
+              placeholder={t.apiKeyPlaceholder}
               className="font-mono"
             />
             {isAuto ? (
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Wand2 className="size-3 text-primary" />
-                Mendukung Groq, Gemini, Claude, OpenRouter, Cerebras, NVIDIA,
-                xAI, DeepSeek, Mistral, dan lainnya.
+                {t.autoHint}
               </p>
             ) : (
               preset?.consoleUrl && (
                 <p className="text-xs text-muted-foreground">
-                  Ambil kunci di{" "}
+                  {t.getKeyAt}{" "}
                   <a
                     href={preset.consoleUrl}
                     target="_blank"
@@ -89,18 +89,18 @@ export function ProviderForm({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor={`${fieldId}-provider`}>Penyedia</Label>
+              <Label htmlFor={`${fieldId}-provider`}>{t.provider}</Label>
               <Select
                 id={`${fieldId}-provider`}
                 name="providerName"
                 value={providerId}
                 onChange={(event) => setProviderId(event.target.value)}
               >
-                <option value={AUTO}>✨ Deteksi otomatis (disarankan)</option>
+                <option value={AUTO}>{t.autoOption}</option>
                 {presets.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.label}
-                    {item.free ? " — ada tier gratis" : ""}
+                    {item.free ? t.freeTier : ""}
                   </option>
                 ))}
               </Select>
@@ -110,7 +110,7 @@ export function ProviderForm({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor={`${fieldId}-priority`}>Prioritas</Label>
+              <Label htmlFor={`${fieldId}-priority`}>{t.priority}</Label>
               <Input
                 id={`${fieldId}-priority`}
                 name="priority"
@@ -120,7 +120,7 @@ export function ProviderForm({
                 defaultValue={10}
               />
               <p className="text-xs text-muted-foreground">
-                Makin tinggi, makin awal dicoba (0–100).
+                {t.priorityHint}
               </p>
             </div>
           </div>
@@ -130,7 +130,7 @@ export function ProviderForm({
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor={`${fieldId}-baseurl`}>
-                  Base URL {isCustom ? "" : "(opsional)"}
+                  {t.baseUrl} {isCustom ? "" : t.optional}
                 </Label>
                 <Input
                   id={`${fieldId}-baseurl`}
@@ -140,25 +140,25 @@ export function ProviderForm({
                   key={`baseurl-${providerId}`}
                   defaultValue={isCustom ? "" : preset?.baseUrl}
                   required={isCustom}
-                  placeholder="https://api.contoh.com/v1"
+                  placeholder={t.baseUrlPlaceholder}
                   className="font-mono text-xs"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor={`${fieldId}-model`}>Model (opsional)</Label>
+                <Label htmlFor={`${fieldId}-model`}>{t.model}</Label>
                 <Input
                   id={`${fieldId}-model`}
                   name="modelName"
                   key={`model-${providerId}`}
                   defaultValue=""
                   placeholder={
-                    preset?.defaultModel || "dipilih otomatis bila dikosongkan"
+                    preset?.defaultModel || t.modelPlaceholder
                   }
                   className="font-mono text-xs"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Kosongkan agar sistem memilih model aktif dari penyedia.
+                  {t.modelHint}
                 </p>
               </div>
             </div>
@@ -174,10 +174,9 @@ export function ProviderForm({
                 className="mt-0.5 size-4 accent-[var(--primary)]"
               />
               <span className="text-sm">
-                <span className="font-medium">Bagikan ke Provider Publik</span>
+                <span className="font-medium">{t.shareTitle}</span>
                 <span className="mt-0.5 block text-xs text-muted-foreground">
-                  Kunci dipakai semua pengguna terdaftar dan demo halaman depan.
-                  Kalau tidak dicentang, kunci ini hanya untuk akun Anda sendiri.
+                  {t.shareBody}
                 </span>
               </span>
             </label>
@@ -197,10 +196,10 @@ export function ProviderForm({
           )}
 
           <div className="flex flex-wrap items-center gap-3">
-            <SubmitButton />
+            <SubmitButton label={t.submit} pendingLabel={t.submitting} />
             {isAuto && (
               <Badge variant="secondary">
-                Base URL &amp; model ditentukan otomatis
+                {t.autoBadge}
               </Badge>
             )}
           </div>
@@ -210,13 +209,19 @@ export function ProviderForm({
   );
 }
 
-function SubmitButton() {
+function SubmitButton({
+  label,
+  pendingLabel,
+}: {
+  label: string;
+  pendingLabel: string;
+}) {
   const { pending } = useFormStatus();
 
   return (
     <Button type="submit" disabled={pending}>
       {pending ? <Loader2 className="animate-spin" /> : <Plus />}
-      {pending ? "Mendeteksi & menguji…" : "Tambahkan kunci"}
+      {pending ? pendingLabel : label}
     </Button>
   );
 }

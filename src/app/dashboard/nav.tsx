@@ -12,24 +12,31 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
+import type { Dictionary } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
-  { href: "/dashboard", label: "Ringkasan", icon: LayoutDashboard },
-  { href: "/dashboard/providers", label: "Provider AI", icon: Server },
-  { href: "/dashboard/api-keys", label: "API Key", icon: KeyRound },
-  { href: "/dashboard/playground", label: "Playground", icon: TerminalSquare },
-  { href: "/dashboard/logs", label: "Riwayat", icon: ScrollText },
-  { href: "/dashboard/plan", label: "Paket", icon: Sparkles },
-];
+  { href: "/dashboard", key: "overview", icon: LayoutDashboard },
+  { href: "/dashboard/providers", key: "providers", icon: Server },
+  { href: "/dashboard/api-keys", key: "apiKeys", icon: KeyRound },
+  { href: "/dashboard/playground", key: "playground", icon: TerminalSquare },
+  { href: "/dashboard/logs", key: "logs", icon: ScrollText },
+  { href: "/dashboard/plan", key: "plan", icon: Sparkles },
+] as const;
 
 const ADMIN_LINK = {
   href: "/dashboard/admin",
-  label: "Admin",
+  key: "admin",
   icon: ShieldCheck,
-};
+} as const;
 
-export function DashboardNav({ isAdmin }: { isAdmin: boolean }) {
+export function DashboardNav({
+  isAdmin,
+  t,
+}: {
+  isAdmin: boolean;
+  t: Dictionary["dash"]["nav"];
+}) {
   const pathname = usePathname();
   const links = isAdmin ? [...LINKS, ADMIN_LINK] : LINKS;
 
@@ -56,7 +63,7 @@ export function DashboardNav({ isAdmin }: { isAdmin: boolean }) {
             )}
           >
             <link.icon className="size-4" />
-            {link.label}
+            {t[link.key]}
           </Link>
         );
       })}

@@ -12,7 +12,12 @@ import { isIP } from "node:net";
  * ikut tertutup.
  */
 
+import type { Dictionary } from "@/lib/i18n";
+
 export type UrlCheck = { ok: true } | { ok: false; reason: string };
+
+/** Kalimat penolakan, dioper pemanggil supaya modul ini tidak membaca cookie. */
+export type UrlGuardCopy = Dictionary["errors"]["url"];
 
 /** Rentang yang tidak boleh dihubungi dari sisi server. */
 function isPrivateAddress(ip: string): boolean {
@@ -55,16 +60,17 @@ function isPrivateAddress(ip: string): boolean {
  */
 export async function assertSafeExternalUrl(
   rawUrl: string,
+  t: UrlGuardCopy,
 ): Promise<UrlCheck> {
   let url: URL;
   try {
     url = new URL(rawUrl);
   } catch {
-    return { ok: false, reason: "Base URL tidak valid." };
+    return { ok: false, reason: t.invalid };
   }
 
   if (url.protocol !== "https:") {
-    return { ok: false, reason: "Base URL harus memakai HTTPS." };
+    return { ok: false, reason: t.httpsRequired };
   }
 
   const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
@@ -75,29 +81,29 @@ export async function assertSafeExternalUrl(
     host.endsWith(".local") ||
     host.endsWith(".internal")
   ) {
-    return { ok: false, reason: "Base URL tidak boleh menunjuk ke jaringan internal." };
+    return { ok: false, reason: t.internalNetwork };
   }
 
   // Alamat IP langsung: periksa apa adanya, tanpa perlu resolusi.
   if (isIP(host)) {
     return isPrivateAddress(host)
-      ? { ok: false, reason: "Base URL tidak boleh menunjuk ke alamat internal." }
+      ? { ok: false, reason: t.internalAddress }
       : { ok: true };
   }
 
   try {
     const records = await lookup(host, { all: true });
     if (records.length === 0) {
-      return { ok: false, reason: "Host pada Base URL tidak dapat diresolusi." };
+      return { ok: false, reason: t.unresolvable };
     }
     if (records.some((record) => isPrivateAddress(record.address))) {
       return {
         ok: false,
-        reason: "Host pada Base URL mengarah ke alamat internal.",
+        reason: t.resolvesInternal,
       };
     }
   } catch {
-    return { ok: false, reason: "Host pada Base URL tidak dapat diresolusi." };
+    return { ok: false, reason: t.unresolvable };
   }
 
   return { ok: true };

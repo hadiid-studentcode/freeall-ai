@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useUiCopy } from "@/lib/i18n/client";
 
 type Theme = "light" | "dark" | "system";
 
@@ -50,6 +51,7 @@ function apply(theme: Theme): void {
 }
 
 export function ThemeToggle() {
+  const ui = useUiCopy();
   const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   function cycle() {
@@ -62,12 +64,12 @@ export function ThemeToggle() {
 
   const label =
     theme === null
-      ? "Ganti tema"
+      ? ui.themeToggle
       : theme === "system"
-        ? "Mengikuti sistem"
+        ? ui.themeSystem
         : theme === "light"
-          ? "Mode terang"
-          : "Mode gelap";
+          ? ui.themeLight
+          : ui.themeDark;
 
   return (
     <Button

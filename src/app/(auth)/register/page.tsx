@@ -6,7 +6,10 @@ import { registerAction } from "@/lib/auth/actions";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getTranslations } from "@/lib/i18n";
 
-export const metadata = { title: "Daftar · FreeAll AI" };
+export async function generateMetadata() {
+  const { t } = await getTranslations();
+  return { title: `${t.auth.registerTitle} · FreeAll AI` };
+}
 
 export default async function RegisterPage() {
   if (await getCurrentUser()) redirect("/dashboard");

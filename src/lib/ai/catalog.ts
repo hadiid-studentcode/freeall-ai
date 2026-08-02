@@ -47,6 +47,26 @@ export async function getProviderCatalog(): Promise<ProviderPreset[]> {
   return [...builtIn, ...extra, ...customOption];
 }
 
+/**
+ * Bentuk penyedia yang aman dikirim ke Client Component.
+ *
+ * `ProviderPreset.keyPattern` adalah `RegExp`, dan React tidak bisa
+ * menyerialkan objek non-plain melewati batas server→klien — mengirim preset
+ * apa adanya membuat halaman gagal dirender. Pola itu memang hanya dipakai
+ * untuk deteksi otomatis di server, jadi di sini sengaja ditanggalkan.
+ */
+export type ProviderOption = Omit<ProviderPreset, "keyPattern">;
+
+export function toProviderOptions(
+  presets: ProviderPreset[],
+): ProviderOption[] {
+  return presets.map((preset) => {
+    const option: ProviderOption = { ...preset };
+    delete (option as ProviderPreset).keyPattern;
+    return option;
+  });
+}
+
 /** Cari satu penyedia, baik bawaan maupun tambahan dari admin. */
 export async function findProvider(
   providerName: string,

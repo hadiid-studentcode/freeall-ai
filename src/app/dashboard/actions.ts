@@ -20,7 +20,13 @@ import {
   previewOf,
   sha256,
 } from "@/lib/crypto";
+import { getTranslations } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
+import {
+  DISABLED_MANUAL,
+  DISABLED_VERIFY_FAILED,
+} from "@/lib/providers/disabled-reason";
+import { formatNumber } from "@/lib/utils";
 
 /**
  * Server Action bisa dipanggil lewat POST langsung, tanpa melewati halaman
@@ -44,12 +50,13 @@ export async function createApiKeyAction(
   formData: FormData,
 ): Promise<ActionState> {
   const user = await requireUser();
+  const { t } = await getTranslations();
 
   const name = String(formData.get("name") ?? "").trim() || "Default";
   const dailyLimit = Number(formData.get("dailyLimit") ?? 500);
 
   if (!Number.isInteger(dailyLimit) || dailyLimit < 1 || dailyLimit > 100_000) {
-    return { error: "Kuota harian harus bilangan bulat antara 1 dan 100.000." };
+    return { error: t.errors.apiKey.invalidQuota };
   }
 
   const account = await prisma.user.findUniqueOrThrow({
@@ -61,9 +68,10 @@ export async function createApiKeyAction(
   const count = await prisma.apiKey.count({ where: { userId: user.id } });
   if (count >= plan.maxApiKeys) {
     return {
-      error:
-        `Paket ${plan.label} dibatasi ${plan.maxApiKeys} API key. ` +
-        `Hapus yang tidak terpakai, atau tingkatkan paket untuk menambah kapasitas.`,
+      error: t.errors.apiKey.planLimit(
+        account.role === "ADMIN" ? t.dash.plan.adminLabel : t.plans[plan.id].label,
+        formatNumber(plan.maxApiKeys),
+      ),
     };
   }
 
@@ -81,7 +89,7 @@ export async function createApiKeyAction(
 
   revalidatePath("/dashboard/api-keys");
   return {
-    success: "API key berhasil dibuat.",
+    success: t.errors.apiKey.created,
     plaintextKey,
   };
 }
@@ -151,6 +159,7 @@ export async function createProviderKeyAction(
   formData: FormData,
 ): Promise<ActionState> {
   const user = await requireUser();
+  const { t } = await getTranslations();
 
   const providerName = String(formData.get("providerName") ?? "")
     .trim()
@@ -166,10 +175,10 @@ export async function createProviderKeyAction(
       ? "SHARED"
       : "PRIVATE";
 
-  if (!providerName) return { error: "Pilih penyedia AI terlebih dahulu." };
-  if (!rawKey) return { error: "API key provider tidak boleh kosong." };
+  if (!providerName) return { error: t.errors.provider.pickProvider };
+  if (!rawKey) return { error: t.errors.provider.keyEmpty };
   if (!Number.isInteger(priority) || priority < 0 || priority > 100) {
-    return { error: "Prioritas harus bilangan bulat antara 0 dan 100." };
+    return { error: t.errors.provider.invalidPriority };
   }
 
   // Mode "auto": kenali penyedia dari kunci, lalu tanyakan langsung ke
@@ -182,18 +191,14 @@ export async function createProviderKeyAction(
   let ranked: string[] = [];
 
   if (providerName === "auto") {
-    const detection = await detectProvider(rawKey);
+    const detection = await detectProvider(rawKey, t.errors.discovery);
     if (!detection.ok) return { error: detection.error };
 
     preset = detection.provider.preset;
     ranked = rankModels(detection.provider.models, preset.format);
 
     if (ranked.length === 0) {
-      return {
-        error:
-          `Penyedia terdeteksi sebagai ${preset.label}, tetapi tidak ada model ` +
-          `chat yang tersedia untuk kunci ini. Pilih penyedia dan model manual.`,
-      };
+      return { error: t.errors.provider.noChatModels(preset.label) };
     }
   }
 
@@ -201,13 +206,11 @@ export async function createProviderKeyAction(
   const resolvedBaseUrl = baseUrl || preset?.baseUrl || "";
 
   if (!resolvedBaseUrl) {
-    return {
-      error: "Base URL wajib diisi untuk penyedia yang tidak punya preset.",
-    };
+    return { error: t.errors.provider.baseUrlRequired };
   }
   // Base URL diisi pengguna dan dipanggil oleh server ini, jadi harus dijaga
   // agar tidak bisa dipakai menembak jaringan internal (SSRF).
-  const urlCheck = await assertSafeExternalUrl(resolvedBaseUrl);
+  const urlCheck = await assertSafeExternalUrl(resolvedBaseUrl, t.errors.url);
   if (!urlCheck.ok) {
     return { error: urlCheck.reason };
   }
@@ -225,7 +228,7 @@ export async function createProviderKeyAction(
     .slice(0, MAX_FALLBACK_MODELS);
 
   if (!resolvedModel) {
-    return { error: "Nama model wajib diisi untuk penyedia ini." };
+    return { error: t.errors.provider.modelRequired };
   }
 
   const keyHash = sha256(rawKey);
@@ -234,7 +237,7 @@ export async function createProviderKeyAction(
     select: { id: true },
   });
   if (duplicate) {
-    return { error: "API key ini sudah terdaftar di sistem." };
+    return { error: t.errors.provider.duplicate };
   }
 
   const keyCiphertext = encryptSecret(rawKey);
@@ -242,13 +245,16 @@ export async function createProviderKeyAction(
 
   // Uji kunci sekali sebelum menyimpan. Nama model yang sudah dipensiunkan atau
   // kuota gratis yang ditutup baru terlihat lewat panggilan nyata seperti ini.
-  const verification = await verifyProviderKey({
-    providerName: resolvedProviderName,
-    keyCiphertext,
-    format,
-    baseUrl: resolvedBaseUrl,
-    modelName: resolvedModel,
-  });
+  const verification = await verifyProviderKey(
+    {
+      providerName: resolvedProviderName,
+      keyCiphertext,
+      format,
+      baseUrl: resolvedBaseUrl,
+      modelName: resolvedModel,
+    },
+    t.errors.verify,
+  );
 
   const rejected = verification.status === "rejected";
 
@@ -270,7 +276,7 @@ export async function createProviderKeyAction(
       isActive: !rejected,
       ...(rejected
         ? {
-            disabledReason: "Gagal uji koneksi saat ditambahkan",
+            disabledReason: DISABLED_VERIFY_FAILED,
             lastError: verification.message.slice(0, 500),
             lastErrorAt: new Date(),
           }
@@ -283,32 +289,35 @@ export async function createProviderKeyAction(
 
   const label = preset?.label ?? resolvedProviderName;
   const detectedNote =
-    providerName === "auto" ? ` (terdeteksi otomatis dari kunci)` : "";
+    providerName === "auto" ? t.errors.provider.detectedNote : "";
 
   if (rejected) {
     return {
-      error:
-        `Kunci ${label}${detectedNote} disimpan tetapi dinonaktifkan — ` +
-        `uji koneksi gagal: ${verification.message} ` +
-        `Periksa kembali API key, Base URL, dan nama modelnya.`,
+      error: t.errors.provider.savedDisabled(
+        `${label}${detectedNote}`,
+        verification.message,
+      ),
     };
   }
 
   if (verification.status === "transient") {
     return {
-      success:
-        `Kunci ${label}${detectedNote} ditambahkan dengan model ${resolvedModel}, ` +
-        `tetapi uji koneksi belum berhasil (${verification.message}). ` +
-        `Kunci tetap aktif karena penyebabnya kemungkinan sementara.`,
+      success: t.errors.provider.savedTransient(
+        `${label}${detectedNote}`,
+        resolvedModel,
+        verification.message,
+      ),
     };
   }
 
   return {
     success:
-      `Kunci ${label}${detectedNote} berhasil ditambahkan dan diuji ` +
-      `dengan model ${verification.model}.` +
+      t.errors.provider.savedOk(
+        `${label}${detectedNote}`,
+        verification.model,
+      ) +
       (fallbackModels.length > 0
-        ? ` ${fallbackModels.length} model cadangan disiapkan bila model ini kena limit.`
+        ? t.errors.provider.fallbackNote(fallbackModels.length)
         : ""),
   };
 }
@@ -391,7 +400,7 @@ export async function toggleProviderKeyAction(
       // hitungan error direset agar kunci kembali diprioritaskan wajar.
       ...(reactivating
         ? { disabledReason: null, errorCount: 0, lastError: null }
-        : { disabledReason: "Dinonaktifkan manual oleh pemilik" }),
+        : { disabledReason: DISABLED_MANUAL }),
     },
   });
 

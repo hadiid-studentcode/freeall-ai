@@ -9,6 +9,7 @@ import {
   pruneExpiredSessions,
 } from "@/lib/auth/session";
 import { hashPassword, verifyPassword } from "@/lib/crypto";
+import { getTranslations } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
 import { checkLoginAttempts, recordFailedLogin } from "@/lib/rate-limit";
 
@@ -41,12 +42,13 @@ export async function registerAction(
   formData: FormData,
 ): Promise<AuthFormState> {
   const { email, password, name } = readCredentials(formData);
+  const { t } = await getTranslations();
 
   if (!email || !email.includes("@")) {
-    return { error: "Alamat email tidak valid." };
+    return { error: t.errors.auth.invalidEmail };
   }
   if (password.length < MIN_PASSWORD_LENGTH) {
-    return { error: `Kata sandi minimal ${MIN_PASSWORD_LENGTH} karakter.` };
+    return { error: t.errors.auth.passwordTooShort(MIN_PASSWORD_LENGTH) };
   }
 
   const existing = await prisma.user.findUnique({
@@ -54,7 +56,7 @@ export async function registerAction(
     select: { id: true },
   });
   if (existing) {
-    return { error: "Email ini sudah terdaftar. Silakan masuk." };
+    return { error: t.errors.auth.emailTaken };
   }
 
   // User pertama otomatis jadi ADMIN — memudahkan setup self-hosted.
@@ -79,6 +81,7 @@ export async function loginAction(
   formData: FormData,
 ): Promise<AuthFormState> {
   const { email, password } = readCredentials(formData);
+  const { t } = await getTranslations();
 
   const ip = await callerIp();
 
@@ -86,11 +89,7 @@ export async function loginAction(
   const throttle = checkLoginAttempts(email, ip);
   if (!throttle.allowed) {
     const minutes = Math.ceil((throttle.retryAfterSeconds ?? 0) / 60);
-    return {
-      error:
-        `Terlalu banyak percobaan masuk yang gagal. ` +
-        `Coba lagi dalam ${minutes} menit.`,
-    };
+    return { error: t.errors.auth.tooManyAttempts(minutes) };
   }
 
   const user = await prisma.user.findUnique({
@@ -100,7 +99,7 @@ export async function loginAction(
 
   // Pesan error sengaja disamakan untuk email tidak ada dan sandi salah,
   // supaya tidak bisa dipakai menebak email mana yang terdaftar.
-  const invalid = { error: "Email atau kata sandi salah." };
+  const invalid = { error: t.errors.auth.invalidCredentials };
   if (!user) {
     recordFailedLogin(email, ip);
     return invalid;

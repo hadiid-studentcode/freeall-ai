@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Check, Heart, Server } from "lucide-react";
 
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { SiteFooter } from "@/components/site-footer";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
+import { getTranslations } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,32 +19,15 @@ import { formatPrice, PLAN_ORDER, PLANS, resolvePlan } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { formatNumber } from "@/lib/utils";
 
-export const metadata = {
-  title: "Harga · FreeAll AI",
-  description:
-    "Pakai gratis dengan API key Anda sendiri, atau berlangganan untuk kuota Provider Publik yang lebih besar.",
-};
+export async function generateMetadata() {
+  const { t } = await getTranslations();
+  return { title: t.home.metaPricingTitle, description: t.home.metaPricingDesc };
+}
 
-const FAQ = [
-  {
-    q: "Kalau saya pakai API key sendiri, apakah tetap kena batas?",
-    a: "Tidak. Batas kuota harian hanya berlaku saat Anda memakai Provider Publik — yaitu kunci milik kami. Begitu Anda menambahkan kunci sendiri, kuotanya milik Anda sepenuhnya dan kami tidak membatasinya.",
-  },
-  {
-    q: "Apa bedanya dengan menjalankan sendiri?",
-    a: "Tidak ada yang dikunci. Kode ini bisa Anda pasang di server sendiri dan seluruh fiturnya jalan. Yang kami jual adalah layanan terkelola: kuota dari kunci kami, riwayat yang disimpan lebih lama, dan Anda tidak perlu mengurus server maupun kunci provider.",
-  },
-  {
-    q: "Bisa berhenti kapan saja?",
-    a: "Bisa. Langganan berlaku sampai tanggal berakhirnya, setelah itu akun kembali ke paket Gratis. Kunci provider dan API key Anda tidak dihapus.",
-  },
-  {
-    q: "Fitur inti apakah dibatasi di paket gratis?",
-    a: "Tidak. Fallback antar model dan kunci, deteksi penyedia otomatis, dan enkripsi kunci tersedia di semua paket — termasuk gratis. Yang membedakan hanya kapasitas.",
-  },
-];
 
 export default async function PricingPage() {
+  const { locale, t } = await getTranslations();
+
   const user = await getCurrentUser();
 
   const account = user
@@ -69,12 +54,13 @@ export default async function PricingPage() {
               href="/docs"
               className="hidden px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
             >
-              Dokumentasi
+              {t.common.docs}
             </Link>
+            <LanguageSwitcher current={locale} />
             <ThemeToggle />
             <Button asChild size="sm">
               <Link href={user ? "/dashboard" : "/register"}>
-                {user ? "Dashboard" : "Daftar gratis"}
+                {user ? t.common.dashboard : t.common.register}
                 <ArrowRight />
               </Link>
             </Button>
@@ -84,20 +70,20 @@ export default async function PricingPage() {
 
       <main className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:py-20">
         <div className="mx-auto max-w-2xl text-center">
-          <Badge variant="outline">Harga</Badge>
+          <Badge variant="outline">{t.pricing.eyebrow}</Badge>
           <h1 className="mt-4 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
-            Bayar hanya kalau butuh kapasitas lebih
+            {t.pricing.title}
           </h1>
           <p className="mt-4 text-pretty text-lg leading-relaxed text-muted-foreground">
-            Dengan API key Anda sendiri, gateway ini gratis dipakai — tanpa
-            batas dari kami. Berlangganan hanya kalau Anda ingin memakai kunci
-            kami, riwayat yang lebih panjang, atau kapasitas yang lebih besar.
+            {t.pricing.subtitle}
           </p>
         </div>
 
         <div className="mt-14 grid gap-6 lg:grid-cols-3">
           {PLAN_ORDER.map((id) => {
             const plan = PLANS[id];
+            // Angka batas dari plans.ts; nama dan fiturnya dari kamus bahasa.
+            const copy = t.plans[id];
             const isCurrent = currentPlan?.id === plan.id;
 
             return (
@@ -111,24 +97,28 @@ export default async function PricingPage() {
               >
                 {plan.highlight && (
                   <span className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <Badge>Paling banyak dipilih</Badge>
+                    <Badge>{t.pricing.mostPicked}</Badge>
                   </span>
                 )}
 
                 <CardHeader>
                   <div className="flex items-center justify-between gap-2">
-                    <CardTitle className="text-xl">{plan.label}</CardTitle>
-                    {isCurrent && <Badge variant="secondary">Paket Anda</Badge>}
+                    <CardTitle className="text-xl">{copy.label}</CardTitle>
+                    {isCurrent && (
+                      <Badge variant="secondary">{t.pricing.yourPlan}</Badge>
+                    )}
                   </div>
-                  <CardDescription>{plan.tagline}</CardDescription>
+                  <CardDescription>{copy.tagline}</CardDescription>
                   <p className="pt-3">
                     <span className="text-3xl font-semibold tabular-nums">
-                      {formatPrice(plan.pricePerMonth)}
+                      {plan.pricePerMonth === 0
+                        ? t.pricing.freeLabel
+                        : formatPrice(plan.pricePerMonth)}
                     </span>
                     {plan.pricePerMonth > 0 && (
                       <span className="text-sm text-muted-foreground">
                         {" "}
-                        / bulan
+                        {t.pricing.perMonth}
                       </span>
                     )}
                   </p>
@@ -136,7 +126,7 @@ export default async function PricingPage() {
 
                 <CardContent className="space-y-5">
                   <ul className="space-y-2.5">
-                    {plan.features.map((feature) => (
+                    {copy.features.map((feature) => (
                       <li key={feature} className="flex gap-2.5 text-sm">
                         <Check className="mt-0.5 size-4 shrink-0 text-primary" />
                         <span className="text-muted-foreground">{feature}</span>
@@ -146,17 +136,20 @@ export default async function PricingPage() {
 
                   <dl className="space-y-1.5 border-t border-border pt-4 text-xs">
                     <Row
-                      label="Kuota Provider Publik"
-                      value={`${formatNumber(plan.publicDailyLimit)} / hari`}
-                    />
-                    <Row label="API key" value={formatNumber(plan.maxApiKeys)} />
-                    <Row
-                      label="Riwayat"
-                      value={`${formatNumber(plan.logRetentionDays)} hari`}
+                      label={t.pricing.rowPublicQuota}
+                      value={`${formatNumber(plan.publicDailyLimit)} ${t.pricing.perDay}`}
                     />
                     <Row
-                      label="Batas lonjakan"
-                      value={`${formatNumber(plan.burstPerMinute)} / menit`}
+                      label={t.pricing.rowApiKeys}
+                      value={formatNumber(plan.maxApiKeys)}
+                    />
+                    <Row
+                      label={t.pricing.rowHistory}
+                      value={`${formatNumber(plan.logRetentionDays)} ${t.pricing.days}`}
+                    />
+                    <Row
+                      label={t.pricing.rowBurst}
+                      value={`${formatNumber(plan.burstPerMinute)} ${t.pricing.perMinute}`}
                     />
                   </dl>
 
@@ -168,10 +161,10 @@ export default async function PricingPage() {
                   >
                     <Link href={user ? "/dashboard" : "/register"}>
                       {isCurrent
-                        ? "Paket aktif"
+                        ? t.pricing.currentPlan
                         : plan.pricePerMonth === 0
-                          ? "Mulai gratis"
-                          : `Pilih ${plan.label}`}
+                          ? t.pricing.startFree
+                          : `${t.pricing.choose} ${copy.label}`}
                     </Link>
                   </Button>
                 </CardContent>
@@ -185,9 +178,7 @@ export default async function PricingPage() {
           <CardContent className="flex flex-wrap items-center gap-4 p-6">
             <Server className="size-5 shrink-0 text-primary" />
             <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-              Pembayaran otomatis belum tersambung. Untuk sementara, peningkatan
-              paket diaktifkan manual oleh admin setelah konfirmasi — hubungi
-              kami setelah mendaftar.
+              {t.pricing.manualNote}
             </p>
           </CardContent>
         </Card>
@@ -200,12 +191,10 @@ export default async function PricingPage() {
             </span>
             <div className="space-y-2">
               <h2 className="text-2xl font-semibold tracking-tight">
-                Memakai versi gratis dan merasa terbantu?
+                {t.pricing.donateTitle}
               </h2>
               <p className="mx-auto max-w-lg text-pretty text-muted-foreground">
-                Donasi membantu menutup biaya server dan kunci provider yang
-                dipakai bersama, sehingga paket gratis tetap bisa berjalan untuk
-                semua orang.
+                {t.pricing.donateBody}
               </p>
             </div>
             <Button variant="outline" asChild>
@@ -215,7 +204,7 @@ export default async function PricingPage() {
                 rel="noopener noreferrer"
               >
                 <Heart />
-                Beri dukungan
+                {t.pricing.donateCta}
               </a>
             </Button>
           </CardContent>
@@ -224,10 +213,10 @@ export default async function PricingPage() {
         {/* FAQ */}
         <section className="mt-16">
           <h2 className="text-center text-2xl font-semibold tracking-tight">
-            Pertanyaan yang sering muncul
+            {t.pricing.faqTitle}
           </h2>
           <div className="mx-auto mt-8 grid max-w-3xl gap-4 sm:grid-cols-2">
-            {FAQ.map((item) => (
+            {t.pricing.faq.map((item) => (
               <Card key={item.q}>
                 <CardContent className="p-5">
                   <h3 className="font-medium">{item.q}</h3>
@@ -240,6 +229,8 @@ export default async function PricingPage() {
           </div>
         </section>
       </main>
+
+      <SiteFooter />
     </div>
   );
 }
@@ -249,7 +240,6 @@ function Row({ label, value }: { label: string; value: string }) {
     <div className="flex justify-between gap-2">
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="font-medium tabular-nums">{value}</dd>
-      <SiteFooter />
     </div>
   );
 }

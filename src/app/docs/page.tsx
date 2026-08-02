@@ -6,9 +6,11 @@ import {
   KeyScopeDiagram,
   RequestFlowDiagram,
 } from "@/components/docs/diagrams";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { SiteFooter } from "@/components/site-footer";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
+import { getTranslations } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,29 +30,24 @@ import {
 import { getProviderCatalog } from "@/lib/ai/catalog";
 import { getCurrentUser } from "@/lib/auth/session";
 
-export const metadata = {
-  title: "Dokumentasi · FreeAll AI",
-  description:
-    "Cara kerja FreeAll AI: alur request, fallback berlapis, kepemilikan kunci, dan referensi API.",
-};
+export async function generateMetadata() {
+  const { t } = await getTranslations();
+  return { title: t.home.metaDocsTitle, description: t.home.metaDocsDesc };
+}
 
-const SECTIONS = [
-  { id: "alur", label: "Alur request" },
-  { id: "fallback", label: "Fallback berlapis" },
-  { id: "kepemilikan", label: "Kepemilikan kunci" },
-  { id: "kuota", label: "Kuota & batas" },
-  { id: "api", label: "Referensi API" },
-];
 
-const STATUS_CODES = [
-  { code: "200", meaning: "Berhasil. Cek `attempts` untuk tahu berapa percobaan yang dilalui." },
-  { code: "400", meaning: "Body tidak valid — `prompt` atau `messages` tidak ada, atau formatnya salah." },
-  { code: "401", meaning: "API key hilang, salah, atau sudah dinonaktifkan." },
-  { code: "429", meaning: "Kuota harian atau batas lonjakan terlampaui. Lihat header `Retry-After`." },
-  { code: "503", meaning: "Tidak ada kunci provider yang bisa dipakai, atau semuanya gagal." },
-];
+
+const SECTION_IDS = [
+  { id: "alur", key: "flow" },
+  { id: "fallback", key: "fallback" },
+  { id: "kepemilikan", key: "ownership" },
+  { id: "kuota", key: "quota" },
+  { id: "api", key: "api" },
+] as const;
 
 export default async function DocsPage() {
+  const { locale, t } = await getTranslations();
+
   const user = await getCurrentUser();
   const catalog = await getProviderCatalog();
   const providers = catalog.filter((preset) => preset.id !== "custom");
@@ -64,41 +61,41 @@ export default async function DocsPage() {
             className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="size-4" />
-            Kembali
+            {t.common.back}
           </Link>
-          <ThemeToggle />
-          <Button asChild size="sm">
-            <Link href={user ? "/dashboard" : "/register"}>
-              {user ? "Dashboard" : "Daftar gratis"}
-              <ArrowRight />
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher current={locale} />
+            <ThemeToggle />
+            <Button asChild size="sm">
+              <Link href={user ? "/dashboard" : "/register"}>
+                {user ? t.common.dashboard : t.common.register}
+                <ArrowRight />
+              </Link>
+            </Button>
+          </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:py-16">
         <div className="max-w-2xl">
-          <Badge variant="outline">Dokumentasi</Badge>
+          <Badge variant="outline">{t.docs.eyebrow}</Badge>
           <h1 className="mt-4 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
-            Cara kerja FreeAll AI
+            {t.docs.title}
           </h1>
           <p className="mt-4 text-pretty text-lg leading-relaxed text-muted-foreground">
-            FreeAll AI berdiri di antara aplikasi Anda dan puluhan penyedia AI.
-            Aplikasi memanggil satu endpoint; gateway yang mengurus kunci mana
-            yang dipakai, model mana yang masih punya kuota, dan apa yang
-            dilakukan saat sebuah kunci kehabisan jatah.
+            {t.docs.intro}
           </p>
         </div>
 
         {/* Daftar isi */}
         <nav className="mt-8 flex flex-wrap gap-2">
-          {SECTIONS.map((section) => (
+          {SECTION_IDS.map((section) => (
             <a
               key={section.id}
               href={`#${section.id}`}
               className="rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
             >
-              {section.label}
+              {t.docs.sections[section.key]}
             </a>
           ))}
         </nav>
@@ -108,53 +105,30 @@ export default async function DocsPage() {
           <section id="alur" className="scroll-mt-20 space-y-6">
             <div className="max-w-2xl">
               <p className="text-sm font-medium uppercase tracking-wider text-primary">
-                Langkah 1
+                {t.docs.stepLabel} 1
               </p>
               <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-                Alur satu request
+                {t.docs.flowTitle}
               </h2>
               <p className="mt-3 text-muted-foreground">
-                Setiap panggilan melewati empat tahap sebelum menyentuh
-                penyedia AI. Kalau salah satu tahap menolak, request berhenti di
-                situ dan aplikasi Anda menerima alasannya.
+                {t.docs.flowSubtitle}
               </p>
             </div>
 
             <Card>
               <CardContent className="p-6">
-                <RequestFlowDiagram />
+                <RequestFlowDiagram t={t.docs.diagrams} />
               </CardContent>
             </Card>
 
             <ol className="grid gap-4 sm:grid-cols-2">
-              {[
-                {
-                  n: "1",
-                  t: "Autentikasi",
-                  d: "Header Authorization dicocokkan dengan API key Anda. Yang disimpan di database hanya hash-nya, jadi kunci asli tidak bisa dibaca ulang siapa pun.",
-                },
-                {
-                  n: "2",
-                  t: "Rate limit",
-                  d: "Kuota harian per API key dan batas lonjakan per menit diperiksa. Kalau habis, balasannya 429 beserta perkiraan waktu pulih.",
-                },
-                {
-                  n: "3",
-                  t: "AiManager",
-                  d: "Inti sistem. Menyusun daftar kunci yang boleh dipakai, lalu mencobanya satu per satu bersama model cadangannya.",
-                },
-                {
-                  n: "4",
-                  t: "Pencatatan",
-                  d: "Hasilnya — berhasil atau gagal, berapa percobaan, berapa milidetik — ditulis ke RequestLog untuk riwayat dan perhitungan kuota.",
-                },
-              ].map((step) => (
-                <li key={step.n}>
+              {t.docs.flowSteps.map((step, index) => (
+                <li key={step.t}>
                   <Card className="h-full">
                     <CardContent className="p-5">
                       <div className="flex items-center gap-2">
                         <span className="flex size-6 items-center justify-center rounded-md bg-primary/15 text-xs font-semibold text-primary">
-                          {step.n}
+                          {index + 1}
                         </span>
                         <h3 className="font-semibold">{step.t}</h3>
                       </div>
@@ -172,75 +146,49 @@ export default async function DocsPage() {
           <section id="fallback" className="scroll-mt-20 space-y-6">
             <div className="max-w-2xl">
               <p className="text-sm font-medium uppercase tracking-wider text-primary">
-                Langkah 2
+                {t.docs.stepLabel} 2
               </p>
               <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-                Fallback berlapis
+                {t.docs.fallbackTitle}
               </h2>
               <p className="mt-3 text-muted-foreground">
-                Ini bagian yang membedakan FreeAll AI dari sekadar coba-ulang.
-                Penyedia gratis menghitung kuota <strong>per model</strong>,
-                bukan per akun — jadi model yang kehabisan jatah belum tentu
-                berarti kuncinya habis.
+                {t.docs.fallbackSubtitlePre}{" "}
+                <strong>{t.docs.fallbackSubtitleBold}</strong>
+                {t.docs.fallbackSubtitlePost}
               </p>
             </div>
 
             <Card>
               <CardContent className="p-6">
-                <FallbackDiagram />
+                <FallbackDiagram t={t.docs.diagrams} />
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">
-                  Apa yang terjadi pada tiap jenis kegagalan
+                  {t.docs.failureTableTitle}
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-0 sm:px-6">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Balasan penyedia</TableHead>
-                      <TableHead>Artinya</TableHead>
-                      <TableHead>Tindakan gateway</TableHead>
+                      <TableHead>{t.docs.colProviderReply}</TableHead>
+                      <TableHead>{t.docs.colMeaning}</TableHead>
+                      <TableHead>{t.docs.colAction}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    <TableRow>
-                      <TableCell className="font-mono text-xs">429</TableCell>
-                      <TableCell className="text-sm">Kuota model habis</TableCell>
-                      <TableCell className="text-sm">
-                        Coba model berikutnya pada kunci yang sama
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-mono text-xs">404</TableCell>
-                      <TableCell className="text-sm">
-                        Model sudah dipensiunkan
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        Coba model berikutnya pada kunci yang sama
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-mono text-xs">401 / 403</TableCell>
-                      <TableCell className="text-sm">
-                        Kunci ditolak permanen
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        Kunci dinonaktifkan otomatis, lanjut ke kunci berikutnya
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-mono text-xs">5xx</TableCell>
-                      <TableCell className="text-sm">
-                        Gangguan sementara
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        Dicatat, lanjut ke percobaan berikutnya
-                      </TableCell>
-                    </TableRow>
+                    {t.docs.failures.map((row) => (
+                      <TableRow key={row.code}>
+                        <TableCell className="font-mono text-xs">
+                          {row.code}
+                        </TableCell>
+                        <TableCell className="text-sm">{row.meaning}</TableCell>
+                        <TableCell className="text-sm">{row.action}</TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -248,12 +196,9 @@ export default async function DocsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Menyembuhkan diri</CardTitle>
+                <CardTitle className="text-base">{t.docs.selfHealTitle}</CardTitle>
                 <CardDescription>
-                  Kalau model cadangan yang akhirnya berhasil, model itu
-                  dinaikkan menjadi model utama. Request berikutnya langsung
-                  memakai yang terbukti jalan, tidak lagi membuang satu
-                  percobaan ke model yang sedang habis.
+                  {t.docs.selfHealBody}
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -263,41 +208,36 @@ export default async function DocsPage() {
           <section id="kepemilikan" className="scroll-mt-20 space-y-6">
             <div className="max-w-2xl">
               <p className="text-sm font-medium uppercase tracking-wider text-primary">
-                Langkah 3
+                {t.docs.stepLabel} 3
               </p>
               <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-                Kunci siapa dipakai siapa
+                {t.docs.ownershipTitle}
               </h2>
               <p className="mt-3 text-muted-foreground">
-                Kunci yang Anda daftarkan bersifat pribadi. Pengguna lain dan
-                pengunjung demo tidak pernah menyentuhnya — kuota yang Anda
-                bayar atau Anda kumpulkan tetap milik Anda.
+                {t.docs.ownershipSubtitle}
               </p>
             </div>
 
             <Card>
               <CardContent className="p-6">
-                <KeyScopeDiagram />
+                <KeyScopeDiagram t={t.docs.diagrams} />
               </CardContent>
             </Card>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Kunci pribadi</CardTitle>
+                  <CardTitle className="text-base">{t.docs.privateKeyTitle}</CardTitle>
                   <CardDescription>
-                    Bawaan setiap kunci yang Anda tambahkan. Hanya dipakai akun
-                    Anda, dan selalu dicoba lebih dulu sebelum yang lain.
+                    {t.docs.privateKeyBody}
                   </CardDescription>
                 </CardHeader>
               </Card>
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Provider Publik</CardTitle>
+                  <CardTitle className="text-base">{t.docs.publicKeyTitle}</CardTitle>
                   <CardDescription>
-                    Kunci yang sengaja dibagikan admin. Menjadi cadangan bagi
-                    semua pengguna sekaligus tenaga untuk demo di halaman depan
-                    yang bisa dicoba tanpa mendaftar.
+                    {t.docs.publicKeyBody}
                   </CardDescription>
                 </CardHeader>
               </Card>
@@ -308,11 +248,10 @@ export default async function DocsPage() {
           <section id="kuota" className="scroll-mt-20 space-y-6">
             <div className="max-w-2xl">
               <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                Kuota dan batas
+                {t.docs.quotaTitle}
               </h2>
               <p className="mt-3 text-muted-foreground">
-                Ada tiga lapis pembatas dengan tujuan berbeda. Semuanya berjalan
-                sebelum request menyentuh penyedia AI.
+                {t.docs.quotaSubtitle}
               </p>
             </div>
 
@@ -321,41 +260,21 @@ export default async function DocsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Batas</TableHead>
-                      <TableHead>Siapa yang mengatur</TableHead>
-                      <TableHead>Berlaku untuk</TableHead>
+                      <TableHead>{t.docs.colLimit}</TableHead>
+                      <TableHead>{t.docs.colWhoSets}</TableHead>
+                      <TableHead>{t.docs.colAppliesTo}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    <TableRow>
-                      <TableCell className="text-sm font-medium">
-                        Kuota harian API key
-                      </TableCell>
-                      <TableCell className="text-sm">Anda sendiri</TableCell>
-                      <TableCell className="text-sm">
-                        Tiap API key, agar satu aplikasi tidak menghabiskan
-                        semuanya
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="text-sm font-medium">
-                        Kuota Provider Publik
-                      </TableCell>
-                      <TableCell className="text-sm">Admin</TableCell>
-                      <TableCell className="text-sm">
-                        Pengguna yang belum membawa kunci sendiri. Lepas begitu
-                        Anda menambahkan kunci pribadi
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="text-sm font-medium">
-                        Batas lonjakan
-                      </TableCell>
-                      <TableCell className="text-sm">Sistem</TableCell>
-                      <TableCell className="text-sm">
-                        30 request per menit per API key
-                      </TableCell>
-                    </TableRow>
+                    {t.docs.quotaRows.map((row) => (
+                      <TableRow key={row.limit}>
+                        <TableCell className="text-sm font-medium">
+                          {row.limit}
+                        </TableCell>
+                        <TableCell className="text-sm">{row.who}</TableCell>
+                        <TableCell className="text-sm">{row.applies}</TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -366,31 +285,30 @@ export default async function DocsPage() {
           <section id="api" className="scroll-mt-20 space-y-6">
             <div className="max-w-2xl">
               <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                Referensi API
+                {t.docs.apiTitle}
               </h2>
               <p className="mt-3 text-muted-foreground">
-                Satu endpoint untuk semua penyedia. Uji langsung tanpa menulis
-                kode lewat{" "}
+                {t.docs.apiSubtitlePre}{" "}
                 <Link
                   href="/dashboard/playground"
                   className="text-primary hover:underline"
                 >
-                  Playground
+                  {t.footer.playground}
                 </Link>
-                .
+                {t.docs.apiSubtitlePost}
               </p>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
               <CodeCard
-                title="Request"
+                title={t.home.request}
                 code={`curl -X POST https://api.freeall.ai/v1/chat \\
   -H "Authorization: Bearer sk-freeall-xxxxx" \\
   -H "Content-Type: application/json" \\
   -d '{"prompt": "Halo!"}'`}
               />
               <CodeCard
-                title="Response"
+                title={t.home.response}
                 code={`{
   "success": true,
   "response": "Halo juga!",
@@ -408,33 +326,35 @@ export default async function DocsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Bentuk body lain</CardTitle>
+                <CardTitle className="text-base">{t.docs.bodyFormsTitle}</CardTitle>
                 <CardDescription>
-                  Selain <code className="font-mono text-xs">prompt</code>,
-                  endpoint menerima percakapan multi-giliran lewat{" "}
-                  <code className="font-mono text-xs">messages</code>, serta
-                  opsi <code className="font-mono text-xs">temperature</code>,{" "}
-                  <code className="font-mono text-xs">max_tokens</code>, dan{" "}
-                  <code className="font-mono text-xs">provider</code> untuk
-                  memaksa satu penyedia.
+                  {t.docs.bodyFormsPre}{" "}
+                  <code className="font-mono text-xs">prompt</code>
+                  {t.docs.bodyFormsMid}{" "}
+                  <code className="font-mono text-xs">messages</code>
+                  {t.docs.bodyFormsOpts}{" "}
+                  <code className="font-mono text-xs">temperature</code>,{" "}
+                  <code className="font-mono text-xs">max_tokens</code>,{" "}
+                  <code className="font-mono text-xs">provider</code>{" "}
+                  {t.docs.bodyFormsPost}
                 </CardDescription>
               </CardHeader>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Kode status</CardTitle>
+                <CardTitle className="text-base">{t.docs.statusTitle}</CardTitle>
               </CardHeader>
               <CardContent className="px-0 sm:px-6">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-24">Kode</TableHead>
-                      <TableHead>Arti</TableHead>
+                      <TableHead className="w-24">{t.docs.colCode}</TableHead>
+                      <TableHead>{t.docs.colMeaningShort}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {STATUS_CODES.map((row) => (
+                    {t.docs.statusCodes.map((row) => (
                       <TableRow key={row.code}>
                         <TableCell className="font-mono text-xs">
                           {row.code}
@@ -450,12 +370,10 @@ export default async function DocsPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">
-                  {providers.length} penyedia dikenali otomatis
+                  {t.docs.providersTitle(providers.length)}
                 </CardTitle>
                 <CardDescription>
-                  Tempel API key apa adanya — penyedianya dikenali dari bentuk
-                  kunci, dan model yang masih aktif ditanyakan langsung ke
-                  sumbernya.
+                  {t.docs.providersBody}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -482,15 +400,14 @@ export default async function DocsPage() {
         <Card className="mt-16">
           <CardContent className="flex flex-col items-center gap-5 p-10 text-center">
             <h2 className="text-balance text-2xl font-semibold tracking-tight">
-              Siap mencoba?
+              {t.docs.ctaTitle}
             </h2>
             <p className="max-w-md text-muted-foreground">
-              Daftar, tempel satu API key gratisan, lalu panggil endpoint yang
-              sama dari aplikasi Anda.
+              {t.docs.ctaBody}
             </p>
             <Button asChild size="lg">
               <Link href={user ? "/dashboard" : "/register"}>
-                {user ? "Buka dashboard" : "Mulai gratis"}
+                {user ? t.home.ctaPrimaryLoggedIn : t.home.ctaPrimary}
                 <ArrowRight />
               </Link>
             </Button>

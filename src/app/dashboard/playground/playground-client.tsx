@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import type { Dictionary } from "@/lib/i18n";
 
 interface RunResult {
   status: number;
@@ -25,9 +26,15 @@ interface RunResult {
   body: string;
 }
 
-export function PlaygroundClient({ providers }: { providers: string[] }) {
+export function PlaygroundClient({
+  providers,
+  t,
+}: {
+  providers: string[];
+  t: Dictionary["dash"]["playground"];
+}) {
   const [apiKey, setApiKey] = useState("");
-  const [prompt, setPrompt] = useState("Halo! Perkenalkan dirimu singkat saja.");
+  const [prompt, setPrompt] = useState(t.promptDefault);
   const [provider, setProvider] = useState("");
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<RunResult | null>(null);
@@ -40,7 +47,7 @@ export function PlaygroundClient({ providers }: { providers: string[] }) {
     if (pending) return;
 
     if (!apiKey.trim()) {
-      setError("Masukkan API key FreeAll AI Anda terlebih dahulu.");
+      setError(t.needKey);
       return;
     }
 
@@ -80,7 +87,7 @@ export function PlaygroundClient({ providers }: { providers: string[] }) {
       });
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : "Permintaan gagal dikirim.",
+        caught instanceof Error ? caught.message : t.sendFailed,
       );
     } finally {
       setPending(false);
@@ -96,16 +103,17 @@ export function PlaygroundClient({ providers }: { providers: string[] }) {
     <div className="grid gap-6 lg:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle>Request</CardTitle>
+          <CardTitle>{t.requestTitle}</CardTitle>
           <CardDescription>
-            Memanggil <code className="font-mono text-xs">POST {endpoint}</code>{" "}
-            persis seperti aplikasi luar Anda.
+            {t.requestHintPre}{" "}
+            <code className="font-mono text-xs">POST {endpoint}</code>{" "}
+            {t.requestHintPost}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={run} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="pg-key">API key FreeAll AI</Label>
+              <Label htmlFor="pg-key">{t.apiKeyLabel}</Label>
               <Input
                 id="pg-key"
                 type="password"
@@ -116,13 +124,12 @@ export function PlaygroundClient({ providers }: { providers: string[] }) {
                 autoComplete="off"
               />
               <p className="text-xs text-muted-foreground">
-                Kunci tidak disimpan — hanya dipakai untuk request ini di
-                peramban Anda.
+                {t.apiKeyHint}
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="pg-prompt">Prompt</Label>
+              <Label htmlFor="pg-prompt">{t.promptLabel}</Label>
               <Textarea
                 id="pg-prompt"
                 value={prompt}
@@ -133,13 +140,13 @@ export function PlaygroundClient({ providers }: { providers: string[] }) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="pg-provider">Paksa penyedia (opsional)</Label>
+              <Label htmlFor="pg-provider">{t.forceProvider}</Label>
               <Select
                 id="pg-provider"
                 value={provider}
                 onChange={(event) => setProvider(event.target.value)}
               >
-                <option value="">Otomatis — sesuai prioritas</option>
+                <option value="">{t.auto}</option>
                 {providers.map((name) => (
                   <option key={name} value={name}>
                     {name}
@@ -147,8 +154,7 @@ export function PlaygroundClient({ providers }: { providers: string[] }) {
                 ))}
               </Select>
               <p className="text-xs text-muted-foreground">
-                Berguna untuk menguji satu penyedia tertentu tanpa mematikan
-                yang lain.
+                {t.forceHint}
               </p>
             </div>
 
@@ -161,7 +167,7 @@ export function PlaygroundClient({ providers }: { providers: string[] }) {
 
             <Button type="submit" disabled={pending}>
               {pending ? <Loader2 className="animate-spin" /> : <Send />}
-              {pending ? "Mengirim…" : "Kirim request"}
+              {pending ? t.sending : t.send}
             </Button>
           </form>
         </CardContent>
@@ -171,11 +177,11 @@ export function PlaygroundClient({ providers }: { providers: string[] }) {
         <Card>
           <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
             <div className="space-y-1.5">
-              <CardTitle>Response</CardTitle>
+              <CardTitle>{t.responseTitle}</CardTitle>
               <CardDescription>
                 {result
-                  ? `Selesai dalam ${result.latencyMs} ms`
-                  : "Belum ada request dikirim."}
+                  ? t.doneIn.replace("{n}", String(result.latencyMs))
+                  : t.notSent}
               </CardDescription>
             </div>
             {result && (
@@ -199,7 +205,7 @@ export function PlaygroundClient({ providers }: { providers: string[] }) {
               </pre>
             ) : (
               <p className="py-10 text-center text-sm text-muted-foreground">
-                Isi API key dan prompt, lalu tekan Kirim request.
+                {t.placeholder}
               </p>
             )}
           </CardContent>
@@ -208,9 +214,9 @@ export function PlaygroundClient({ providers }: { providers: string[] }) {
         <Card>
           <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
             <div className="space-y-1.5">
-              <CardTitle className="text-base">Setara cURL</CardTitle>
+              <CardTitle className="text-base">{t.curlTitle}</CardTitle>
               <CardDescription>
-                Salin untuk dipakai di terminal atau aplikasi Anda.
+                {t.curlHint}
               </CardDescription>
             </div>
             <CopyButton value={curl} />

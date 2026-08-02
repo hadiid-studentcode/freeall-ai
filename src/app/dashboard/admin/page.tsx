@@ -38,15 +38,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { requireAdmin } from "@/lib/auth/guard";
+import { getTranslations } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
-import { PLAN_ORDER, PLANS, resolvePlan } from "@/lib/plans";
+import { PLAN_ORDER, resolvePlan } from "@/lib/plans";
 import { getPublicDailyLimit } from "@/lib/settings";
 import { formatDateTime, formatNumber, formatRelative } from "@/lib/utils";
 
-export const metadata = { title: "Admin · FreeAll AI" };
+export async function generateMetadata() {
+  const { t } = await getTranslations();
+  return { title: `${t.dash.admin.title} · FreeAll AI` };
+}
 
 export default async function AdminPage() {
   const admin = await requireAdmin();
+  const { t } = await getTranslations();
+  const d = t.dash.admin;
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -115,44 +121,44 @@ export default async function AdminPage() {
       <header>
         <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight sm:text-3xl">
           <ShieldCheck className="size-6 text-primary" />
-          Admin
+          {d.title}
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Kelola Provider Publik dan pengguna. Kunci di Provider Publik dipakai
-          semua akun terdaftar sekaligus menjadi tenaga untuk demo halaman depan
-          yang bisa dicoba pengunjung tanpa mendaftar.
+          {d.subtitle}
         </p>
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={<Users className="size-4" />}
-          label="Pengguna"
+          label={d.statUsers}
           value={formatNumber(users.length)}
-          hint={`${users.filter((u) => u.role === "ADMIN").length} admin`}
+          hint={d.statUsersHint(
+            users.filter((u) => u.role === "ADMIN").length,
+          )}
         />
         <StatCard
           icon={<Share2 className="size-4" />}
-          label="Kunci publik"
+          label={d.statPublicKeys}
           value={formatNumber(sharedKeys.filter((k) => k.isActive).length)}
-          hint={`dari ${formatNumber(totalKeys)} kunci total`}
+          hint={d.statPublicKeysHint(formatNumber(totalKeys))}
         />
         <StatCard
           icon={<Activity className="size-4" />}
-          label="Request hari ini"
+          label={d.statRequests}
           value={formatNumber(requestsToday)}
-          hint={`${formatNumber(demoToday)} dari demo`}
+          hint={d.statRequestsHint(formatNumber(demoToday))}
         />
         <StatCard
           icon={<KeyRound className="size-4" />}
-          label="Tingkat sukses"
+          label={d.statSuccess}
           value={successRate === null ? "—" : `${successRate}%`}
           hint={
             providerBreakdown.length > 0
               ? providerBreakdown
                   .map((p) => `${p.providerName ?? "?"} ${p._count._all}`)
                   .join(" · ")
-              : "belum ada request"
+              : d.statSuccessNone
           }
         />
       </div>
@@ -161,28 +167,23 @@ export default async function AdminPage() {
         <Alert variant="warning">
           <Share2 />
           <AlertDescription>
-            Belum ada kunci di Provider Publik, jadi demo halaman depan dan
-            pengguna yang belum membawa kunci sendiri akan menerima 503.
-            Tambahkan kunci di{" "}
+            {d.emptyPoolPre}{" "}
             <Link
               href="/dashboard/providers"
               className="font-medium underline underline-offset-4"
             >
-              Provider AI
+              {d.emptyPoolCta}
             </Link>{" "}
-            dan centang &quot;Bagikan ke Provider Publik&quot;.
+            {d.emptyPoolPost}
           </AlertDescription>
         </Alert>
       )}
 
       <Card>
         <CardHeader>
-          <CardTitle>Kuota pengguna tanpa kunci sendiri</CardTitle>
+          <CardTitle>{d.quotaTitle}</CardTitle>
           <CardDescription>
-            Pagar harian untuk pengguna yang mengandalkan Provider Publik.
-            Begitu mereka menambahkan kunci provider sendiri, pagar ini lepas.
-            Isi <strong>0</strong> untuk menutup pemakaian Provider Publik
-            sepenuhnya.
+            {d.quotaDescPre} <strong>0</strong> {d.quotaDescPost}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -195,7 +196,7 @@ export default async function AdminPage() {
                 htmlFor="public-limit"
                 className="text-sm font-medium text-foreground/90"
               >
-                Request per hari
+                {d.quotaField}
               </label>
               <Input
                 id="public-limit"
@@ -207,9 +208,9 @@ export default async function AdminPage() {
                 className="w-40"
               />
             </div>
-            <Button type="submit">Simpan</Button>
+            <Button type="submit">{d.save}</Button>
             <p className="text-xs text-muted-foreground">
-              Berlaku sejak request berikutnya.
+              {d.quotaNote}
             </p>
           </form>
         </CardContent>
@@ -217,27 +218,27 @@ export default async function AdminPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Provider Publik</CardTitle>
+          <CardTitle>{d.poolTitle}</CardTitle>
           <CardDescription>
-            Kunci yang dipakai semua pengguna dan demo halaman depan.
+            {d.poolDesc}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-0 sm:px-6">
           {sharedKeys.length === 0 ? (
             <p className="px-6 py-8 text-center text-sm text-muted-foreground sm:px-0">
-              Belum ada kunci yang dibagikan.
+              {d.poolEmpty}
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Penyedia</TableHead>
-                  <TableHead>Model</TableHead>
-                  <TableHead>Pemilik</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Sukses / Gagal</TableHead>
-                  <TableHead>Terakhir dipakai</TableHead>
-                  <TableHead className="text-right">Aksi</TableHead>
+                  <TableHead>{d.colProvider}</TableHead>
+                  <TableHead>{d.colModel}</TableHead>
+                  <TableHead>{d.colOwner}</TableHead>
+                  <TableHead>{d.colStatus}</TableHead>
+                  <TableHead>{d.colSuccess}</TableHead>
+                  <TableHead>{d.colLastUsed}</TableHead>
+                  <TableHead className="text-right">{d.colActions}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -257,11 +258,11 @@ export default async function AdminPage() {
                       </p>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {key.user?.email ?? "sistem"}
+                      {key.user?.email ?? d.system}
                     </TableCell>
                     <TableCell>
                       <Badge variant={key.isActive ? "success" : "destructive"}>
-                        {key.isActive ? "Aktif" : "Nonaktif"}
+                        {key.isActive ? d.active : d.inactive}
                       </Badge>
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs">
@@ -279,7 +280,7 @@ export default async function AdminPage() {
                       <form action={toggleKeyScopeAction}>
                         <input type="hidden" name="id" value={key.id} />
                         <Button type="submit" variant="outline" size="sm">
-                          Jadikan pribadi
+                          {d.makePrivate}
                         </Button>
                       </form>
                     </TableCell>
@@ -293,11 +294,9 @@ export default async function AdminPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Katalog penyedia</CardTitle>
+          <CardTitle>{d.catalogTitle}</CardTitle>
           <CardDescription>
-            Tambahkan penyedia AI baru tanpa deploy ulang. Yang tersimpan di
-            sini langsung muncul di halaman depan, dokumentasi, dan formulir
-            pendaftaran kunci. Penyedia bawaan tidak perlu didaftarkan lagi.
+            {d.catalogDesc}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -305,12 +304,16 @@ export default async function AdminPage() {
             action={createCustomProviderAction}
             className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
           >
-            <Input name="slug" placeholder="Slug — mis. novita" required />
-            <Input name="label" placeholder="Nama tampilan — Novita AI" required />
-            <Select name="format" defaultValue="openai" aria-label="Format API">
-              <option value="openai">Format OpenAI</option>
-              <option value="gemini">Format Gemini</option>
-              <option value="anthropic">Format Anthropic</option>
+            <Input name="slug" placeholder={d.catalogSlug} required />
+            <Input name="label" placeholder={d.catalogLabel} required />
+            <Select
+              name="format"
+              defaultValue="openai"
+              aria-label={d.catalogFormat}
+            >
+              <option value="openai">{d.catalogFormatOpenai}</option>
+              <option value="gemini">{d.catalogFormatGemini}</option>
+              <option value="anthropic">{d.catalogFormatAnthropic}</option>
             </Select>
             <Input
               name="baseUrl"
@@ -320,21 +323,21 @@ export default async function AdminPage() {
             />
             <Input
               name="defaultModel"
-              placeholder="Model bawaan"
+              placeholder={d.catalogModel}
               className="font-mono text-xs"
               required
             />
-            <Input name="consoleUrl" placeholder="URL halaman API key (opsional)" />
+            <Input name="consoleUrl" placeholder={d.catalogConsole} />
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 name="free"
                 className="size-4 accent-[var(--primary)]"
               />
-              Punya tier gratis
+              {d.catalogFree}
             </label>
             <div className="sm:col-span-2 lg:col-span-3">
-              <Button type="submit">Tambahkan penyedia</Button>
+              <Button type="submit">{d.catalogSubmit}</Button>
             </div>
           </form>
 
@@ -349,7 +352,9 @@ export default async function AdminPage() {
                     <p className="flex items-center gap-2 font-medium">
                       {provider.label}
                       <Badge variant="outline">{provider.format}</Badge>
-                      {provider.free && <Badge variant="success">gratis</Badge>}
+                      {provider.free && (
+                        <Badge variant="success">{d.catalogFreeBadge}</Badge>
+                      )}
                     </p>
                     <p className="truncate font-mono text-xs text-muted-foreground">
                       {provider.baseUrl} · {provider.defaultModel}
@@ -357,7 +362,12 @@ export default async function AdminPage() {
                   </div>
                   <form action={deleteCustomProviderAction}>
                     <input type="hidden" name="id" value={provider.id} />
-                    <Button type="submit" variant="ghost" size="icon" title="Hapus">
+                    <Button
+                      type="submit"
+                      variant="ghost"
+                      size="icon"
+                      title={d.remove}
+                    >
                       <Trash2 className="text-destructive" />
                     </Button>
                   </form>
@@ -370,25 +380,23 @@ export default async function AdminPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Pengguna</CardTitle>
+          <CardTitle>{d.usersTitle}</CardTitle>
           <CardDescription>
-            {users.length} akun terdaftar. Admin bisa membagikan kunci ke kolam
-            bersama; pengguna biasa hanya memakai kunci sendiri dan kolam
-            bersama.
+            {d.usersDesc(users.length)}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-0 sm:px-6">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Email</TableHead>
-                <TableHead>Nama</TableHead>
-                <TableHead>Peran</TableHead>
-                <TableHead>Paket</TableHead>
-                <TableHead>Kunci provider</TableHead>
-                <TableHead>API key</TableHead>
-                <TableHead>Bergabung</TableHead>
-                <TableHead className="text-right">Aksi</TableHead>
+                <TableHead>{d.colEmail}</TableHead>
+                <TableHead>{d.colName}</TableHead>
+                <TableHead>{d.colRole}</TableHead>
+                <TableHead>{d.colPlan}</TableHead>
+                <TableHead>{d.colProviderKeys}</TableHead>
+                <TableHead>{d.colApiKeys}</TableHead>
+                <TableHead>{d.colJoined}</TableHead>
+                <TableHead className="text-right">{d.colActions}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -400,7 +408,7 @@ export default async function AdminPage() {
                       {user.email}
                       {isSelf && (
                         <span className="ml-2 text-xs text-muted-foreground">
-                          (Anda)
+                          {d.you}
                         </span>
                       )}
                     </TableCell>
@@ -426,11 +434,11 @@ export default async function AdminPage() {
                           name="plan"
                           defaultValue={resolvePlan(user).id}
                           className="h-8 w-24 px-2 text-xs"
-                          aria-label={`Paket ${user.email}`}
+                          aria-label={d.planAria(user.email)}
                         >
                           {PLAN_ORDER.map((id) => (
                             <option key={id} value={id}>
-                              {PLANS[id].label}
+                              {t.plans[id].label}
                             </option>
                           ))}
                         </Select>
@@ -441,16 +449,16 @@ export default async function AdminPage() {
                           max={3650}
                           defaultValue={30}
                           className="h-8 w-16 px-2 text-xs"
-                          aria-label="Masa berlaku (hari)"
-                          title="Masa berlaku dalam hari; 0 = tanpa batas"
+                          aria-label={d.durationAria}
+                          title={d.durationTitle}
                         />
                         <Button type="submit" variant="ghost" size="sm">
-                          Set
+                          {d.set}
                         </Button>
                       </form>
                       {user.planExpiresAt && (
                         <p className="mt-1 text-xs text-muted-foreground">
-                          s/d {formatDateTime(user.planExpiresAt)}
+                          {d.until} {formatDateTime(user.planExpiresAt)}
                         </p>
                       )}
                     </TableCell>
@@ -473,8 +481,8 @@ export default async function AdminPage() {
                               <input type="hidden" name="id" value={user.id} />
                               <Button type="submit" variant="outline" size="sm">
                                 {user.role === "ADMIN"
-                                  ? "Jadikan user"
-                                  : "Jadikan admin"}
+                                  ? d.makeUser
+                                  : d.makeAdmin}
                               </Button>
                             </form>
                             <form action={deleteUserAction}>
@@ -483,7 +491,7 @@ export default async function AdminPage() {
                                 type="submit"
                                 variant="ghost"
                                 size="icon"
-                                title="Hapus pengguna beserta seluruh kuncinya"
+                                title={d.removeUser}
                               >
                                 <Trash2 className="text-destructive" />
                               </Button>

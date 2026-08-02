@@ -4,12 +4,18 @@ import { TriangleAlert } from "lucide-react";
 import { PlaygroundClient } from "@/app/dashboard/playground/playground-client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { requireUser } from "@/lib/auth/guard";
+import { getTranslations } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
 
-export const metadata = { title: "Playground · FreeAll AI" };
+export async function generateMetadata() {
+  const { t } = await getTranslations();
+  return { title: `${t.dash.playground.title} · FreeAll AI` };
+}
 
 export default async function PlaygroundPage() {
   const user = await requireUser();
+  const { t } = await getTranslations();
+  const d = t.dash.playground;
 
   const [apiKeyCount, providerRows] = await Promise.all([
     prisma.apiKey.count({ where: { userId: user.id, isActive: true } }),
@@ -30,11 +36,10 @@ export default async function PlaygroundPage() {
     <div className="space-y-8">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          Playground
+          {d.title}
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Uji endpoint gateway langsung dari sini — lengkap dengan header
-          Authorization, kode status, dan waktu respons yang sebenarnya.
+          {d.subtitle}
         </p>
       </header>
 
@@ -42,20 +47,21 @@ export default async function PlaygroundPage() {
         <Alert variant="warning">
           <TriangleAlert />
           <AlertDescription>
-            Anda belum punya API key aktif.{" "}
+            {d.noKeyPre}{" "}
             <Link
               href="/dashboard/api-keys"
               className="font-medium underline underline-offset-4"
             >
-              Buat satu di halaman API Key
+              {d.noKeyCta}
             </Link>{" "}
-            lalu tempel di sini.
+            {d.noKeyPost}
           </AlertDescription>
         </Alert>
       )}
 
       <PlaygroundClient
         providers={providerRows.map((row) => row.providerName)}
+        t={d}
       />
     </div>
   );
