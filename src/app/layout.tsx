@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 import { getLocale, getTranslations } from "@/lib/i18n";
 import { LocaleProvider } from "@/lib/i18n/client";
+import { getTheme } from "@/lib/theme";
+import { ThemeProvider } from "@/lib/theme/client";
+import { themeClass } from "@/lib/theme/shared";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,38 +28,28 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-/**
- * Memasang tema sebelum halaman digambar.
- *
- * Kalau menunggu React, pengguna bertema terang akan melihat kilatan gelap
- * lebih dulu di setiap pemuatan halaman. Dipasang lewat `next/script` dengan
- * strategi `beforeInteractive` — bukan tag `<script>` biasa — karena React
- * tidak menjalankan tag skrip yang dirender sebagai elemen komponen.
- */
-const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem('freeall-theme')||'system';var d=t==='dark'||(t==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d)}catch(e){document.documentElement.classList.add('dark')}})()`;
-
 export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Atribut lang penting untuk pembaca layar dan mesin telusur, jadi harus
-  // ikut bahasa yang dipilih pengunjung.
-  const locale = await getLocale();
+  // Bahasa dan tema sama-sama dibaca dari cookie di server.
+  //
+  // Tema karena itu sudah benar sejak byte pertama HTML: tidak ada skrip yang
+  // perlu berjalan lebih dulu, dan tidak ada beda markup server/klien yang
+  // perlu dibungkam dengan suppressHydrationWarning. Atribut `lang` juga
+  // penting untuk pembaca layar dan mesin telusur.
+  const [locale, theme] = await Promise.all([getLocale(), getTheme()]);
 
   return (
     <html
       lang={locale}
-      className={`${geistSans.variable} ${geistMono.variable} h-full`}
-      // Kelas `dark` dipasang skrip di atas sebelum React berjalan, sehingga
-      // markup server dan klien memang berbeda di sini — dan itu disengaja.
-      suppressHydrationWarning
+      className={`${geistSans.variable} ${geistMono.variable} h-full ${themeClass(theme)}`}
     >
       <body className="min-h-full">
-        <Script id="theme-init" strategy="beforeInteractive">
-          {THEME_SCRIPT}
-        </Script>
-        <LocaleProvider value={locale}>{children}</LocaleProvider>
+        <LocaleProvider value={locale}>
+          <ThemeProvider value={theme}>{children}</ThemeProvider>
+        </LocaleProvider>
       </body>
     </html>
   );

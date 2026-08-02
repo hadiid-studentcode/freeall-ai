@@ -9,6 +9,15 @@ import { getTranslations } from "@/lib/i18n";
 import { assertSafeExternalUrl } from "@/lib/security/url-guard";
 import { prisma } from "@/lib/prisma";
 import {
+  clearMidtransCredentials,
+  PAYMENT_MODES,
+  saveMidtransCredentials,
+  setManualInstructions,
+  setPaymentMode,
+  type PaymentMode,
+} from "@/lib/payments/config";
+import { markOrderPaid } from "@/lib/payments/orders";
+import {
   setDemoGlobalDailyLimit,
   setPublicDailyLimit,
 } from "@/lib/settings";
@@ -214,4 +223,120 @@ export async function deleteCustomProviderAction(
   revalidatePath("/dashboard/admin");
   revalidatePath("/");
   revalidatePath("/docs");
+}
+
+/* -------------------------------------------------------------------------- */
+/* Pembayaran                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/** Pilih jalur pembayaran yang dibuka untuk pengguna. */
+export async function updatePaymentModeAction(
+  formData: FormData,
+): Promise<void> {
+  await requireAdmin();
+  const mode = String(formData.get("mode") ?? "");
+
+  if (!(PAYMENT_MODES as readonly string[]).includes(mode)) return;
+
+  await setPaymentMode(mode as PaymentMode);
+  revalidatePath("/dashboard/admin");
+  revalidatePath("/dashboard/plan");
+}
+
+/** Petunjuk transfer yang dilihat pembeli pada jalur manual. */
+export async function updateManualInstructionsAction(
+  formData: FormData,
+): Promise<void> {
+  await requireAdmin();
+  await setManualInstructions(String(formData.get("instructions") ?? ""));
+
+  revalidatePath("/dashboard/admin");
+  revalidatePath("/dashboard/plan");
+}
+
+/**
+ * Simpan kredensial Midtrans ke database.
+ *
+ * Hanya berlaku bila `MIDTRANS_SERVER_KEY` di environment kosong — env selalu
+ * menang, supaya konfigurasi deploy tidak diam-diam ditimpa lewat dashboard.
+ */
+export async function saveMidtransCredentialsAction(
+  formData: FormData,
+): Promise<void> {
+  await requireAdmin();
+
+  const serverKey = String(formData.get("serverKey") ?? "").trim();
+  const clientKey = String(formData.get("clientKey") ?? "").trim();
+  const isProduction = formData.get("isProduction") === "on";
+
+  if (!serverKey || !clientKey) return;
+
+  await saveMidtransCredentials({ serverKey, clientKey, isProduction });
+  revalidatePath("/dashboard/admin");
+  revalidatePath("/dashboard/plan");
+}
+
+export async function clearMidtransCredentialsAction(): Promise<void> {
+  await requireAdmin();
+  await clearMidtransCredentials();
+
+  revalidatePath("/dashboard/admin");
+  revalidatePath("/dashboard/plan");
+}
+
+/**
+ * Setujui tagihan transfer manual.
+ *
+ * Pengaktifan paketnya dilimpahkan ke `markOrderPaid()` — satu-satunya tempat
+ * yang boleh menambah masa berlaku karena pembayaran, dipakai bersama webhook
+ * Midtrans supaya kedua jalur tidak berbeda perilaku.
+ */
+export async function approveManualPaymentAction(
+  formData: FormData,
+): Promise<void> {
+  const admin = await requireAdmin();
+  const orderId = String(formData.get("orderId") ?? "");
+  const note = String(formData.get("adminNote") ?? "").trim();
+
+  const payment = await prisma.payment.findUnique({
+    where: { orderId },
+    select: { method: true, status: true },
+  });
+
+  // Hanya jalur manual yang boleh disetujui dari sini. Tagihan Midtrans
+  // statusnya ditentukan notifikasi mereka; menyetujuinya manual berarti
+  // memberi paket atas uang yang belum tentu masuk.
+  if (payment?.method !== "MANUAL") return;
+  if (payment.status !== "AWAITING_REVIEW" && payment.status !== "PENDING") {
+    return;
+  }
+
+  await markOrderPaid({
+    orderId,
+    channel: "manual-transfer",
+    reviewedBy: admin.email,
+    adminNote: note ? note.slice(0, 500) : null,
+  });
+
+  revalidatePath("/dashboard/admin");
+}
+
+export async function rejectManualPaymentAction(
+  formData: FormData,
+): Promise<void> {
+  const admin = await requireAdmin();
+  const orderId = String(formData.get("orderId") ?? "");
+  const note = String(formData.get("adminNote") ?? "").trim();
+
+  await prisma.payment.updateMany({
+    where: { orderId, method: "MANUAL", status: { not: "PAID" } },
+    data: {
+      status: "FAILED",
+      adminNote: note ? note.slice(0, 500) : null,
+      reviewedBy: admin.email,
+      reviewedAt: new Date(),
+    },
+  });
+
+  revalidatePath("/dashboard/admin");
 }

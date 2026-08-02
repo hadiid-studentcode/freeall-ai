@@ -20,8 +20,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Checkout, type Offer } from "@/app/dashboard/plan/checkout";
+import { OpenOrderCard } from "@/app/dashboard/plan/open-order";
+import { PaymentHistory } from "@/app/dashboard/plan/history";
 import { requireUser } from "@/lib/auth/guard";
 import { getTranslations } from "@/lib/i18n";
+import {
+  BILLING_CYCLES,
+  PURCHASABLE_PLANS,
+  quote,
+} from "@/lib/payments/billing";
+import {
+  getAvailableMethods,
+  getManualInstructions,
+  getMidtransCredentials,
+} from "@/lib/payments/config";
+import { expireOverdueOrders, findOpenOrder } from "@/lib/payments/orders";
 import { formatPrice, PLAN_ORDER, PLANS, resolvePlan } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { getPublicDailyLimit } from "@/lib/settings";
@@ -36,6 +50,12 @@ export default async function PlanPage() {
   const user = await requireUser();
   const { t } = await getTranslations();
   const d = t.dash.plan;
+  const b = t.dash.billing;
+
+  // Tagihan yang lewat tenggat dibereskan sebelum apa pun dibaca, supaya
+  // halaman ini tidak pernah menawarkan "lanjutkan pembayaran" untuk tagihan
+  // yang sebenarnya sudah hangus.
+  await expireOverdueOrders(user.id);
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -53,6 +73,46 @@ export default async function PlanPage() {
       }),
       getPublicDailyLimit(),
     ]);
+
+  const [methods, manualInstructions, midtrans, openOrder, payments] =
+    await Promise.all([
+      getAvailableMethods(),
+      getManualInstructions(),
+      getMidtransCredentials(),
+      findOpenOrder(user.id),
+      prisma.payment.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: {
+          id: true,
+          orderId: true,
+          plan: true,
+          amount: true,
+          method: true,
+          status: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+  // Harga dihitung di server dan dikirim sudah jadi teks. Klien tidak pernah
+  // menghitung ulang, supaya angka di layar selalu sama dengan yang ditagih.
+  const offers: Offer[] = PURCHASABLE_PLANS.flatMap((purchasable) =>
+    BILLING_CYCLES.map((cycle) => {
+      const price = quote(purchasable, cycle);
+      return {
+        plan: purchasable,
+        cycle,
+        planLabel: t.plans[purchasable].label,
+        priceLabel: formatPrice(price.amount),
+        cycleLabel: cycle === "YEARLY" ? b.perYear : b.perMonth,
+        savingsLabel:
+          price.savings > 0 ? b.savings(formatPrice(price.savings)) : null,
+        featured: purchasable === "PRO" && cycle === "MONTHLY",
+      };
+    }),
+  );
 
   const plan = resolvePlan(account);
   // Angka batas dari plans.ts; nama dan taglinenya dari kamus bahasa.
@@ -258,17 +318,95 @@ export default async function PlanPage() {
         </div>
       </div>
 
-      <Card>
-        <CardContent className="flex flex-wrap items-center gap-4 p-6">
-          <Sparkles className="size-5 shrink-0 text-primary" />
-          <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-            {d.manualNote}
-          </p>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/pricing">{d.seePricing}</Link>
-          </Button>
-        </CardContent>
-      </Card>
+      {openOrder ? (
+        <OpenOrderCard
+          manualInstructions={manualInstructions}
+          order={{
+            orderId: openOrder.orderId,
+            planLabel: t.plans[openOrder.plan].label,
+            amountLabel: formatPrice(openOrder.amount),
+            createdLabel: formatDateTime(openOrder.createdAt),
+            dueLabel: openOrder.expiresAt
+              ? formatDateTime(openOrder.expiresAt)
+              : null,
+            method: openOrder.method,
+            status: openOrder.status === "AWAITING_REVIEW"
+              ? "AWAITING_REVIEW"
+              : "PENDING",
+            redirectUrl: openOrder.snapRedirectUrl,
+          }}
+          copy={{
+            openTitle: b.openTitle,
+            orderId: b.orderId,
+            amount: b.amount,
+            created: b.created,
+            due: b.due,
+            continuePayment: b.continuePayment,
+            cancelOrder: b.cancelOrder,
+            manualHowTo: b.manualHowTo,
+            noInstructions: b.noInstructions,
+            proofLabel: b.proofLabel,
+            proofPlaceholder: b.proofPlaceholder,
+            proofSubmit: b.proofSubmit,
+            awaitingReview: b.awaitingReview,
+            processing: b.processing,
+            statusPENDING: b.statusPENDING,
+            statusAWAITING_REVIEW: b.statusAWAITING_REVIEW,
+          }}
+        />
+      ) : methods.any ? (
+        <Checkout
+          offers={offers}
+          allowMidtrans={methods.midtrans}
+          allowManual={methods.manual}
+          sandbox={midtrans !== null && !midtrans.isProduction}
+          copy={{
+            title: b.title,
+            subtitle: b.subtitle,
+            payMidtrans: b.payMidtrans,
+            payManual: b.payManual,
+            processing: b.processing,
+            sandboxNotice: b.sandboxNotice,
+            yearlyBadge: b.yearlyBadge,
+          }}
+        />
+      ) : (
+        <Card>
+          <CardContent className="flex flex-wrap items-center gap-4 p-6">
+            <Sparkles className="size-5 shrink-0 text-primary" />
+            <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+              {b.closed}
+            </p>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/pricing">{d.seePricing}</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <PaymentHistory
+        rows={payments.map((payment) => ({
+          id: payment.id,
+          orderId: payment.orderId,
+          date: formatDateTime(payment.createdAt),
+          planLabel: t.plans[payment.plan].label,
+          amountLabel: formatPrice(payment.amount),
+          methodLabel:
+            payment.method === "MIDTRANS" ? b.methodMidtrans : b.methodManual,
+          statusLabel: b[`status${payment.status}`],
+          status: payment.status,
+        }))}
+        copy={{
+          historyTitle: b.historyTitle,
+          historyEmpty: b.historyEmpty,
+          colDate: b.colDate,
+          colPlan: b.colPlan,
+          colAmount: b.colAmount,
+          colMethod: b.colMethod,
+          colStatus: b.colStatus,
+          orderId: b.orderId,
+        }}
+      />
     </div>
   );
 }

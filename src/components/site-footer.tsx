@@ -77,7 +77,7 @@ export async function SiteFooter() {
 
         <div className="mt-10 flex flex-col gap-3 border-t border-border pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>
-            © {new Date().getFullYear()} FreeAll AI. {t.footer.selfHost}
+            © {new Date().getFullYear()} FreeAll AI. {t.footer.onPremise}
           </p>
           <p className="max-w-xl sm:text-right">
             {t.footer.disclaimer}

@@ -36,7 +36,7 @@ export const id = {
       "Cara kerja FreeAll AI: alur request, fallback berlapis, kepemilikan kunci, dan referensi API.",
     metaDescription:
       "API Gateway dengan sistem fallback cerdas. Satukan API key gratisan Anda dari Groq, Gemini, Claude, dan puluhan penyedia lain dalam satu endpoint.",
-    badge: "Gratis untuk dipakai · Bisa di-self-host",
+    badge: "Gratis untuk dipakai · Bawa kunci sendiri",
     titleLead: "Routing AI",
     titleAccent: "tanpa batas",
     subtitle:
@@ -48,7 +48,7 @@ export const id = {
       "Tanpa kartu kredit",
       "Kunci dienkripsi AES-256",
       "Fallback model dan kunci",
-      "Bisa di-self-host penuh",
+      "Siap dipakai dalam hitungan menit",
     ],
     demoUnavailableTitle: "Demo sedang tidak tersedia",
     demoUnavailableBody:
@@ -129,7 +129,7 @@ export const id = {
     terms: "Syarat & ketentuan",
     privacy: "Kebijakan privasi",
     security_link: "Keamanan data",
-    selfHost: "Bisa di-self-host sepenuhnya.",
+    onPremise: "Tersedia on-premise untuk kebutuhan enterprise.",
     disclaimer:
       "Prompt Anda diteruskan ke penyedia AI pihak ketiga dan tunduk pada kebijakan masing-masing. Jangan kirim data rahasia.",
   },
@@ -171,6 +171,23 @@ export const id = {
       invalidCredentials: "Email atau kata sandi salah.",
     },
 
+    billing: {
+      invalidSelection: "Paket atau siklus penagihan tidak dikenali.",
+      midtransUnavailable:
+        "Pembayaran otomatis sedang tidak tersedia. Hubungi admin instance ini.",
+      manualUnavailable: "Jalur transfer manual sedang ditutup admin.",
+      midtransFailed: (detail: string) =>
+        `Gagal membuat transaksi di Midtrans: ${detail}`,
+      orderAlreadyOpen: (orderId: string) =>
+        `Masih ada tagihan yang belum selesai (${orderId}). Selesaikan atau batalkan dulu sebelum membuat yang baru.`,
+      manualCreated:
+        "Tagihan dibuat. Lakukan transfer sesuai petunjuk, lalu tekan \u201cSaya sudah transfer\u201d.",
+      proofTooShort:
+        "Tulis keterangan transfer Anda — misalnya nama pengirim dan nomor referensi.",
+      proofSubmitted:
+        "Terima kasih. Tagihan Anda masuk antrean pemeriksaan admin.",
+      orderNotFound: "Tagihan tidak ditemukan atau sudah tidak bisa diubah.",
+    },
     apiKey: {
       invalidQuota: "Kuota harian harus bilangan bulat antara 1 dan 100.000.",
       planLimit: (plan: string, max: string) =>
@@ -326,8 +343,8 @@ export const id = {
         a: "Tidak. Batas kuota harian hanya berlaku saat Anda memakai Provider Publik — yaitu kunci milik kami. Begitu Anda menambahkan kunci sendiri, kuotanya milik Anda sepenuhnya dan kami tidak membatasinya.",
       },
       {
-        q: "Apa bedanya dengan menjalankan sendiri?",
-        a: "Tidak ada yang dikunci. Kode ini bisa Anda pasang di server sendiri dan seluruh fiturnya jalan. Yang kami jual adalah layanan terkelola: kuota dari kunci kami, riwayat yang disimpan lebih lama, dan Anda tidak perlu mengurus server maupun kunci provider.",
+        q: "Bisa dipasang di server kami sendiri?",
+        a: "Bisa, lewat lisensi on-premise untuk enterprise — hubungi kami untuk pembahasannya. Di luar itu, FreeAll AI adalah layanan terkelola: kuota dari kunci kami, riwayat yang disimpan lebih lama, dan Anda tidak perlu mengurus server maupun mengumpulkan kunci provider sendiri.",
       },
       {
         q: "Bisa berhenti kapan saja?",
@@ -528,9 +545,9 @@ export const id = {
         ],
       },
       {
-        title: "7. Self-hosted",
+        title: "7. Pemasangan on-premise",
         body: [
-          "Ketentuan ini berlaku untuk instance yang kami operasikan. Kalau Anda memasang FreeAll AI di server sendiri, Anda yang bertanggung jawab penuh atas operasional, keamanan, dan kepatuhannya.",
+          "Ketentuan ini berlaku untuk instance yang kami operasikan. Pemasangan di infrastruktur Anda sendiri hanya tersedia lewat lisensi on-premise tertulis; syaratnya diatur dalam perjanjian terpisah, dan tanggung jawab operasional, keamanan, serta kepatuhannya ada pada Anda.",
         ],
       },
       {
@@ -578,9 +595,9 @@ export const id = {
     deleteTitle: "Menghapus data",
     deleteBody:
       "Anda bisa menghapus kunci provider dan API key kapan saja lewat dashboard; penghapusan berlaku langsung. Untuk menghapus seluruh akun beserta datanya, hubungi admin instance ini.",
-    selfHostTitle: "Self-hosted",
-    selfHostBody:
-      "Kalau Anda memasang FreeAll AI di server sendiri, seluruh data berada di infrastruktur Anda dan kebijakan ini tidak berlaku — Andalah pengendali datanya. Simpan ENCRYPTION_KEY baik-baik: tanpa itu, kunci yang sudah tersimpan tidak bisa didekripsi lagi.",
+    onPremiseTitle: "Pemasangan on-premise",
+    onPremiseBody:
+      "Untuk pelanggan dengan lisensi on-premise, seluruh data berada di infrastruktur Anda sendiri dan kebijakan ini tidak berlaku — Andalah pengendali datanya. Simpan ENCRYPTION_KEY baik-baik: tanpa itu, kunci yang sudah tersimpan tidak bisa didekripsi lagi.",
   },
 
   dash: {
@@ -690,6 +707,50 @@ export const id = {
     },
 
     admin: {
+      paymentTitle: "Pembayaran",
+      paymentDesc:
+        "Tentukan jalur yang boleh dipakai pengguna untuk naik paket. Jalur Midtrans hanya benar-benar terbuka bila kredensialnya sudah terpasang.",
+      modeLabel: "Jalur pembayaran",
+      modeOFF: "Tutup semua — tidak ada yang bisa naik paket sendiri",
+      modeMANUAL: "Transfer manual saja — admin yang mengonfirmasi",
+      modeMIDTRANS: "Midtrans saja — otomatis",
+      modeBOTH: "Keduanya — pembeli yang memilih",
+      modeNotReady:
+        "Mode ini memerlukan kredensial Midtrans, yang belum terpasang. Selama itu belum ada, jalur Midtrans tetap tertutup bagi pengguna.",
+      instructionsLabel: "Petunjuk transfer manual",
+      instructionsPlaceholder:
+        "Contoh:\nBCA 1234567890 a.n. Nama Anda\nCantumkan nomor pesanan pada berita transfer.",
+      instructionsHint:
+        "Ditampilkan ke pembeli saat mereka memilih transfer manual.",
+      midtransTitle: "Kredensial Midtrans",
+      midtransFromEnv:
+        "Terbaca dari environment variable. Nilai di sini tidak dipakai selama env terisi — ubah lewat konfigurasi deploy.",
+      midtransFromDb: "Diatur lewat dashboard ini, tersimpan terenkripsi.",
+      midtransMissing: "Belum terpasang.",
+      serverKey: "Server key",
+      clientKey: "Client key",
+      production: "Mode produksi (bukan sandbox)",
+      saveCredentials: "Simpan kredensial",
+      clearCredentials: "Hapus kredensial",
+      webhookTitle: "URL notifikasi",
+      webhookHint:
+        "Daftarkan alamat ini di dashboard Midtrans → Settings → Configuration → Payment Notification URL. Tanpa itu, paket tidak akan pernah aktif otomatis.",
+      sandboxBadge: "Sandbox",
+      productionBadge: "Produksi",
+
+      queueTitle: "Konfirmasi transfer manual",
+      queueDesc:
+        "Tagihan yang pembelinya mengaku sudah transfer. Setujui hanya setelah uangnya terlihat di mutasi rekening.",
+      queueEmpty: "Tidak ada yang menunggu konfirmasi.",
+      queueColUser: "Pembeli",
+      queueColOrder: "Pesanan",
+      queueColPlan: "Paket",
+      queueColAmount: "Jumlah",
+      queueColNote: "Keterangan pembeli",
+      queueColCreated: "Dibuat",
+      approve: "Setujui",
+      reject: "Tolak",
+      adminNotePlaceholder: "Catatan (opsional)",
       title: "Admin",
       subtitle:
         "Kelola Provider Publik dan pengguna. Kunci di Provider Publik dipakai semua akun terdaftar sekaligus menjadi tenaga untuk demo halaman depan yang bisa dicoba pengunjung tanpa mendaftar.",
@@ -760,6 +821,60 @@ export const id = {
       makeUser: "Jadikan user",
       makeAdmin: "Jadikan admin",
       removeUser: "Hapus pengguna beserta seluruh kuncinya",
+    },
+
+    billing: {
+      title: "Tingkatkan paket",
+      subtitle:
+        "Pilih paket dan siklus penagihan. Masa berlaku yang tersisa tidak hangus — ditambahkan ke periode baru.",
+      closed:
+        "Admin instance ini belum membuka jalur pembayaran. Hubungi admin untuk naik paket.",
+      cycleMonthly: "Bulanan",
+      cycleYearly: "Tahunan",
+      yearlyBadge: "Hemat 2 bulan",
+      perMonth: "/ bulan",
+      perYear: "/ tahun",
+      savings: (amount: string) => `Hemat ${amount} dibanding bayar bulanan`,
+      payMidtrans: "Bayar dengan Midtrans",
+      payManual: "Transfer manual",
+      processing: "Memproses…",
+      sandboxNotice:
+        "Midtrans masih dalam mode sandbox — pembayaran tidak menarik uang sungguhan.",
+
+      openTitle: "Tagihan berjalan",
+      orderId: "Nomor pesanan",
+      amount: "Jumlah",
+      created: "Dibuat",
+      due: "Batas waktu",
+      continuePayment: "Lanjutkan pembayaran",
+      cancelOrder: "Batalkan",
+      manualHowTo: "Cara membayar",
+      noInstructions:
+        "Admin belum menuliskan petunjuk transfer. Hubungi admin untuk detail rekening.",
+      proofLabel: "Keterangan transfer",
+      proofPlaceholder: "mis. Transfer BCA a.n. Budi, ref 1234567",
+      proofSubmit: "Saya sudah transfer",
+      awaitingReview:
+        "Menunggu pemeriksaan admin. Paket aktif setelah transfer Anda dicocokkan.",
+
+      historyTitle: "Riwayat pembayaran",
+      historyEmpty: "Belum ada transaksi.",
+      colDate: "Tanggal",
+      colPlan: "Paket",
+      colAmount: "Jumlah",
+      colMethod: "Metode",
+      colStatus: "Status",
+      methodMidtrans: "Midtrans",
+      methodManual: "Transfer manual",
+      statusPENDING: "Menunggu pembayaran",
+      statusAWAITING_REVIEW: "Menunggu pemeriksaan",
+      statusPAID: "Lunas",
+      statusFAILED: "Gagal",
+      statusEXPIRED: "Kedaluwarsa",
+      statusCANCELLED: "Dibatalkan",
+      returnedPaid: "Pembayaran diterima — paket Anda sudah aktif.",
+      returnedPending:
+        "Pembayaran belum terkonfirmasi. Kalau Anda sudah membayar, status akan berubah sendiri dalam beberapa menit.",
     },
 
     logs: {

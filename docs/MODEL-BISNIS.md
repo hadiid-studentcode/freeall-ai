@@ -43,21 +43,22 @@ Poin ketiga sering diremehkan, padahal itu yang membuat orang enggan berpindah p
 
 ## 4. Model pendapatan
 
-### Prinsip: open-core
+### Prinsip: yang dijual adalah kapasitas, bukan kemampuan
 
-Kode tetap terbuka dan bisa di-self-host. **Yang dijual bukan perangkat lunaknya, melainkan layanan terkelola.**
+Kode sumber bersifat tertutup. **Yang dijual bukan perangkat lunaknya, melainkan layanan terkelola** — kuota dari kunci milik operator, riwayat yang disimpan lebih lama, dan kapasitas yang lebih longgar.
 
-Ini bukan kompromi — ini justru kekuatan posisi:
+Ini menentukan cara membatasi paket:
 
-- Orang yang mau repot bisa self-host. Mereka memang bukan calon pembeli.
-- Orang yang tidak mau mengurus server, database, dan mengumpulkan kunci sendiri akan membayar.
-- Keterbukaan kode membangun kepercayaan pada produk yang **menyimpan API key orang lain** — dan kepercayaan itu justru yang paling sulit dibeli.
+- Yang dibatasi hanya hal yang menimbulkan biaya nyata bagi operator: kuota Provider Publik, retensi riwayat, batas lonjakan, jumlah API key.
+- Orang yang tidak mau mengurus server, database, dan mengumpulkan kunci sendiri akan membayar. Itulah seluruh pasar Anda.
+
+> **Catatan kepercayaan.** Produk ini menyimpan API key milik orang lain. Dengan kode tertutup, klaim keamanan tidak bisa diverifikasi siapa pun dari luar, sehingga kepercayaan harus dibangun lewat jalan lain: kebijakan privasi yang jelas, laporan audit keamanan pihak ketiga, atau halaman status. Ini biaya nyata dari memilih kode tertutup, dan sebaiknya diperhitungkan sejak awal.
 
 ### Yang TIDAK dibatasi di paket gratis
 
 Fallback, deteksi penyedia otomatis, enkripsi kunci, jumlah kunci pribadi.
 
-**Alasannya penting untuk dipahami:** melumpuhkan fitur inti hanya membuat orang memilih self-host, dan Anda kehilangan calon pelanggan sebelum sempat mengenalnya. Yang dijual adalah **kapasitas**, bukan kemampuan.
+**Alasannya penting untuk dipahami:** melumpuhkan fitur inti membuat pengguna tidak pernah merasakan nilai produk, dan Anda kehilangan calon pelanggan sebelum sempat mengenalnya. Yang dijual adalah **kapasitas**, bukan kemampuan.
 
 ### Paket
 
@@ -77,7 +78,7 @@ Fallback, deteksi penyedia otomatis, enkripsi kunci, jumlah kunci pribadi.
 |---|---|---|
 | Langganan Pro/Team | 85–95% | Tulang punggung |
 | Donasi | < 5% | Pelengkap, jangan diandalkan |
-| Dukungan & instalasi self-host | 5–10% | Untuk perusahaan yang butuh on-premise |
+| Lisensi on-premise + dukungan | 5–10% | Untuk perusahaan yang wajib memasang di infrastruktur sendiri; dijual per kontrak, bukan diunduh bebas |
 
 ---
 
@@ -98,7 +99,7 @@ Jawaban yang benar **bukan** "karena fiturnya lebih banyak". Yang benar:
 |---|---|---|
 | Pakai satu penyedia langsung | Mati saat kuota habis | Fallback lintas penyedia |
 | OpenRouter | Berbayar per token, bukan mengumpulkan kunci gratis | Fokus pada kunci gratisan milik pengguna |
-| LiteLLM (self-host) | Perlu dikonfigurasi manual, tanpa UI | Deteksi otomatis + dashboard siap pakai |
+| LiteLLM (sumber terbuka) | Perlu dikonfigurasi manual, tanpa UI | Deteksi otomatis + dashboard siap pakai |
 | Bikin fallback sendiri | Perlu waktu, dan model cepat usang | Sudah jadi, dan daftar model diperbarui otomatis |
 
 **Pembeda paling tajam yang layak diulang:** fallback **per model**, bukan hanya per kunci. Kompetitor umumnya berpindah kunci saat kena 429 — padahal kuota gratis dihitung per model, jadi kunci itu sering masih punya sisa jatah di model lain.
@@ -117,7 +118,7 @@ Jawaban yang benar **bukan** "karena fiturnya lebih banyak". Yang benar:
 
 **Ke calon investor (60 detik):**
 
-> "Pasar AI dibanjiri penyedia baru dengan tier gratis, tapi kuotanya kecil dan sering berubah. Developer akhirnya menulis logika fallback sendiri — berulang-ulang, di tiap proyek. FreeAll AI menjadikannya infrastruktur. Modelnya open-core: kode terbuka membangun kepercayaan untuk produk yang menyimpan API key orang, sementara pendapatannya dari layanan terkelola. Biaya marginal per pengguna gratis mendekati nol karena mereka membawa kunci sendiri, jadi pertumbuhan tidak membakar uang."
+> "Pasar AI dibanjiri penyedia baru dengan tier gratis, tapi kuotanya kecil dan sering berubah. Developer akhirnya menulis logika fallback sendiri — berulang-ulang, di tiap proyek. FreeAll AI menjadikannya infrastruktur. Pendapatannya dari langganan layanan terkelola, dan biaya marginal per pengguna gratis mendekati nol karena mereka membawa kunci sendiri — jadi pertumbuhan tidak membakar uang."
 
 ---
 
@@ -131,8 +132,11 @@ Bergantung ketentuan tiap penyedia. FreeAll AI tidak membuat kunci — pengguna 
 **"Apakah prompt saya aman?"**
 Prompt diteruskan ke penyedia pihak ketiga dan tunduk pada kebijakan mereka. Isi percakapan **tidak** disimpan di database FreeAll AI, tapi jangan pernah menjanjikan kerahasiaan yang tidak bisa dijamin.
 
-**"Kenapa bayar kalau bisa self-host?"**
-Jawabannya bukan menakut-nakuti. Yang benar: "Kalau Anda nyaman mengurus server dan mengumpulkan kunci sendiri, silakan — memang gratis. Yang kami jual adalah tidak perlu melakukan itu."
+**"Kenapa bayar kalau saya bisa membuat sendiri?"**
+Jawabannya bukan menakut-nakuti. Yang benar: "Logika fallback-nya memang bisa Anda tulis sendiri. Yang kami jual adalah tidak perlu menulisnya, tidak perlu mengurus server dan database, dan tidak perlu mengumpulkan kunci sendiri."
+
+**"Kodenya terbuka?"**
+Tidak. Katakan apa adanya, jangan mengaburkan. Kalau lawan bicara butuh memasang di infrastruktur sendiri, arahkan ke lisensi on-premise — itu jalur berbayar, bukan unduhan bebas.
 
 ---
 

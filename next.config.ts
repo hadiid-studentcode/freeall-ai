@@ -32,8 +32,13 @@ const securityHeaders = [
           key: "Content-Security-Policy",
           value: [
             "default-src 'self'",
-            // `unsafe-inline` masih dibutuhkan skrip pemasang tema di <head>
-            // yang harus berjalan sebelum halaman digambar.
+            // `unsafe-inline` dibutuhkan Next.js sendiri: payload React Server
+            // Component dikirim lewat skrip inline `self.__next_f.push(...)`
+            // pada setiap halaman. Menghapusnya butuh nonce per request, yang
+            // menuntut proxy dan membuat semua halaman jadi dinamis.
+            //
+            // (Ini BUKAN lagi soal skrip pemasang tema — tema kini ditentukan
+            // di server lewat cookie, tanpa skrip apa pun.)
             "script-src 'self' 'unsafe-inline'",
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: blob:",

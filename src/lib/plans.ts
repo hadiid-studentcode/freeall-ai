@@ -3,14 +3,14 @@ import type { Plan, Role } from "@/generated/prisma/enums";
 /**
  * Definisi paket langganan — satu sumber kebenaran.
  *
- * Yang dijual bukan perangkat lunaknya (kode tetap bisa di-self-host), melainkan
- * layanan terkelola: kuota dari kunci milik operator, riwayat yang disimpan
- * lebih lama, dan kapasitas yang lebih longgar. Karena itu batas-batas di sini
- * berkisar pada hal yang memang menimbulkan biaya bagi operator.
+ * Yang dijual adalah layanan terkelola: kuota dari kunci milik operator,
+ * riwayat yang disimpan lebih lama, dan kapasitas yang lebih longgar. Karena
+ * itu batas-batas di sini berkisar pada hal yang memang menimbulkan biaya bagi
+ * operator.
  *
  * Fitur inti — fallback, deteksi otomatis penyedia, enkripsi kunci — sengaja
- * TIDAK dibatasi. Melumpuhkannya di paket gratis hanya membuat orang memilih
- * self-host, dan justru menghilangkan calon pelanggan.
+ * TIDAK dibatasi. Melumpuhkannya hanya membuat pengguna tidak pernah merasakan
+ * nilai produknya, dan calon pelanggan hilang sebelum sempat mengenalnya.
  *
  * Berkas ini hanya memuat angka. Nama paket, tagline, dan daftar fiturnya ada
  * di kamus bahasa (`t.plans`) supaya ikut dwibahasa — menyalinnya ke sini

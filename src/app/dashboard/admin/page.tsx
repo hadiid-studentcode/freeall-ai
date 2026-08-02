@@ -5,18 +5,26 @@ import {
   Share2,
   ShieldCheck,
   Trash2,
+  TriangleAlert,
   Users,
 } from "lucide-react";
 
 import {
+  approveManualPaymentAction,
+  clearMidtransCredentialsAction,
   deleteUserAction,
+  rejectManualPaymentAction,
+  saveMidtransCredentialsAction,
   toggleKeyScopeAction,
+  updateManualInstructionsAction,
+  updatePaymentModeAction,
   toggleUserRoleAction,
   updatePublicDailyLimitAction,
   updateUserPlanAction,
   createCustomProviderAction,
   deleteCustomProviderAction,
 } from "@/app/dashboard/admin/actions";
+import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,8 +47,16 @@ import {
 } from "@/components/ui/table";
 import { requireAdmin } from "@/lib/auth/guard";
 import { getTranslations } from "@/lib/i18n";
+import {
+  getManualInstructions,
+  getMidtransStatus,
+  getPaymentMode,
+  PAYMENT_MODES,
+} from "@/lib/payments/config";
+import { formatPrice } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { PLAN_ORDER, resolvePlan } from "@/lib/plans";
+import { headers } from "next/headers";
 import { getPublicDailyLimit } from "@/lib/settings";
 import { formatDateTime, formatNumber, formatRelative } from "@/lib/utils";
 
@@ -112,6 +128,39 @@ export default async function AdminPage() {
     getPublicDailyLimit(),
     prisma.customProvider.findMany({ orderBy: { createdAt: "asc" } }),
   ]);
+
+  const [paymentMode, midtrans, manualInstructions, pendingPayments, headerBag] =
+    await Promise.all([
+      getPaymentMode(),
+      getMidtransStatus(),
+      getManualInstructions(),
+      // Antrean kerja admin: tagihan manual yang menunggu keputusan manusia.
+      prisma.payment.findMany({
+        where: { method: "MANUAL", status: { in: ["AWAITING_REVIEW", "PENDING"] } },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          orderId: true,
+          plan: true,
+          amount: true,
+          status: true,
+          payerNote: true,
+          createdAt: true,
+          user: { select: { email: true } },
+        },
+      }),
+      headers(),
+    ]);
+
+  // Alamat webhook harus absolut dan menunjuk instance ini, karena Midtrans
+  // memanggilnya dari luar. APP_URL menang bila diisi — di belakang proxy,
+  // header host belum tentu alamat publik yang sebenarnya.
+  const origin =
+    process.env.APP_URL?.trim().replace(/\/$/, "") ??
+    `${headerBag.get("x-forwarded-proto") ?? "http"}://${
+      headerBag.get("x-forwarded-host") ?? headerBag.get("host") ?? "localhost:3000"
+    }`;
+  const webhookUrl = `${origin}/api/payments/midtrans/notification`;
 
   const successRate =
     requestsToday === 0 ? null : Math.round((successToday / requestsToday) * 100);
@@ -213,6 +262,250 @@ export default async function AdminPage() {
               {d.quotaNote}
             </p>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{d.paymentTitle}</CardTitle>
+          <CardDescription>{d.paymentDesc}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <form
+            action={updatePaymentModeAction}
+            className="flex flex-wrap items-end gap-3"
+          >
+            <div className="space-y-2">
+              <label
+                htmlFor="payment-mode"
+                className="text-sm font-medium text-foreground/90"
+              >
+                {d.modeLabel}
+              </label>
+              <Select
+                id="payment-mode"
+                name="mode"
+                defaultValue={paymentMode}
+                className="w-72"
+              >
+                {PAYMENT_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {d[`mode${mode}`]}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <Button type="submit">{d.save}</Button>
+          </form>
+
+          {/* Memilih Midtrans tanpa kredensial hanya menghasilkan tombol yang
+              gagal saat diklik, jadi keadaannya dikatakan terus terang. */}
+          {(paymentMode === "MIDTRANS" || paymentMode === "BOTH") &&
+            !midtrans.configured && (
+              <Alert variant="warning">
+                <TriangleAlert />
+                <AlertDescription>{d.modeNotReady}</AlertDescription>
+              </Alert>
+            )}
+
+          <form action={updateManualInstructionsAction} className="space-y-2">
+            <label
+              htmlFor="manual-instructions"
+              className="text-sm font-medium text-foreground/90"
+            >
+              {d.instructionsLabel}
+            </label>
+            <Textarea
+              id="manual-instructions"
+              name="instructions"
+              rows={4}
+              maxLength={1000}
+              defaultValue={manualInstructions}
+              placeholder={d.instructionsPlaceholder}
+            />
+            <div className="flex flex-wrap items-center gap-3">
+              <Button type="submit" variant="outline" size="sm">
+                {d.save}
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                {d.instructionsHint}
+              </p>
+            </div>
+          </form>
+
+          <div className="space-y-3 border-t border-border pt-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-medium">{d.midtransTitle}</h3>
+              {midtrans.configured && (
+                <Badge variant={midtrans.isProduction ? "default" : "warning"}>
+                  {midtrans.isProduction
+                    ? d.productionBadge
+                    : d.sandboxBadge}
+                </Badge>
+              )}
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              {!midtrans.configured
+                ? d.midtransMissing
+                : midtrans.source === "env"
+                  ? d.midtransFromEnv
+                  : d.midtransFromDb}
+            </p>
+
+            {midtrans.configured && (
+              <dl className="grid gap-2 text-xs sm:grid-cols-2">
+                <div>
+                  <dt className="text-muted-foreground">{d.serverKey}</dt>
+                  <dd className="font-mono">{midtrans.serverKeyPreview}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">{d.clientKey}</dt>
+                  <dd className="break-all font-mono">{midtrans.clientKey}</dd>
+                </div>
+              </dl>
+            )}
+
+            {midtrans.source !== "env" && (
+              <form
+                action={saveMidtransCredentialsAction}
+                className="grid gap-3 sm:grid-cols-2"
+              >
+                <Input
+                  name="serverKey"
+                  type="password"
+                  autoComplete="off"
+                  placeholder={d.serverKey}
+                  className="font-mono text-xs"
+                  required
+                />
+                <Input
+                  name="clientKey"
+                  placeholder={d.clientKey}
+                  className="font-mono text-xs"
+                  required
+                />
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="isProduction"
+                    defaultChecked={midtrans.isProduction}
+                    className="size-4 accent-[var(--primary)]"
+                  />
+                  {d.production}
+                </label>
+                <div className="flex flex-wrap gap-2 sm:col-span-2">
+                  <Button type="submit" size="sm">
+                    {d.saveCredentials}
+                  </Button>
+                  {midtrans.source === "database" && (
+                    <Button
+                      type="submit"
+                      size="sm"
+                      variant="ghost"
+                      formAction={clearMidtransCredentialsAction}
+                    >
+                      {d.clearCredentials}
+                    </Button>
+                  )}
+                </div>
+              </form>
+            )}
+
+            <div className="rounded-lg border border-border bg-background/50 p-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {d.webhookTitle}
+              </p>
+              <code className="mt-2 block break-all font-mono text-xs">
+                {webhookUrl}
+              </code>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {d.webhookHint}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{d.queueTitle}</CardTitle>
+          <CardDescription>{d.queueDesc}</CardDescription>
+        </CardHeader>
+        <CardContent className="px-0 sm:px-6">
+          {pendingPayments.length === 0 ? (
+            <p className="px-6 py-8 text-center text-sm text-muted-foreground sm:px-0">
+              {d.queueEmpty}
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{d.queueColUser}</TableHead>
+                  <TableHead>{d.queueColOrder}</TableHead>
+                  <TableHead>{d.queueColPlan}</TableHead>
+                  <TableHead>{d.queueColAmount}</TableHead>
+                  <TableHead>{d.queueColNote}</TableHead>
+                  <TableHead>{d.queueColCreated}</TableHead>
+                  <TableHead className="text-right">{d.colActions}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pendingPayments.map((payment) => (
+                  <TableRow key={payment.id}>
+                    <TableCell className="text-sm">
+                      {payment.user.email}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {payment.orderId}
+                    </TableCell>
+                    <TableCell>{t.plans[payment.plan].label}</TableCell>
+                    <TableCell className="whitespace-nowrap tabular-nums">
+                      {formatPrice(payment.amount)}
+                    </TableCell>
+                    <TableCell className="max-w-[16rem] text-xs text-muted-foreground">
+                      {payment.payerNote ?? "—"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                      {formatDateTime(payment.createdAt)}
+                    </TableCell>
+                    <TableCell>
+                      {/* Satu form, dua tujuan: tombol tolak mengalihkan
+                          kirimannya lewat formAction sehingga catatan admin
+                          ikut terbawa pada kedua keputusan. */}
+                      <form className="flex flex-wrap items-center justify-end gap-2">
+                        <input
+                          type="hidden"
+                          name="orderId"
+                          value={payment.orderId}
+                        />
+                        <Input
+                          name="adminNote"
+                          placeholder={d.adminNotePlaceholder}
+                          className="h-8 w-40 px-2 text-xs"
+                        />
+                        <Button
+                          type="submit"
+                          size="sm"
+                          formAction={approveManualPaymentAction}
+                        >
+                          {d.approve}
+                        </Button>
+                        <Button
+                          type="submit"
+                          size="sm"
+                          variant="ghost"
+                          formAction={rejectManualPaymentAction}
+                        >
+                          {d.reject}
+                        </Button>
+                      </form>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 

@@ -115,9 +115,9 @@ export default async function PrivacyPage() {
             </p>
           </Section>
 
-          <Section title={t.privacy.selfHostTitle}>
+          <Section title={t.privacy.onPremiseTitle}>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              {t.privacy.selfHostBody}
+              {t.privacy.onPremiseBody}
             </p>
           </Section>
         </div>

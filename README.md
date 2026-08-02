@@ -26,6 +26,7 @@ FreeAll AI menangani keduanya secara otomatis, sehingga aplikasi Anda tidak perl
 | **13+ penyedia** | Groq, Gemini, Claude, OpenRouter, Cerebras, NVIDIA, xAI, Fireworks, OpenAI, DeepSeek, Mistral, Together, SambaNova — plus penyedia kustom yang bisa ditambah admin tanpa deploy ulang. |
 | **Isolasi kunci** | Kunci pribadi hanya dipakai pemiliknya. Kunci publik dikelola admin dan dibagi bersama. |
 | **Paket berlangganan** | FREE / PRO / TEAM dengan batas kuota, API key, retensi riwayat, dan lonjakan. |
+| **Pembayaran** | Midtrans Snap (otomatis) dan transfer manual dengan konfirmasi admin. Jalur mana yang dibuka ditentukan admin dari dashboard. |
 | **Enkripsi** | Kunci provider dienkripsi AES-256-GCM. Kunci SaaS disimpan sebagai hash. |
 | **Dwibahasa** | Bahasa Indonesia dan Inggris. |
 | **Tema** | Terang, gelap, atau ikut sistem. |
@@ -170,6 +171,7 @@ Menambah penyedia berformat OpenAI cukup satu entri di `providers.ts` — atau l
 | `ProviderKey` | Inti fallback; kunci terenkripsi, `fallbackModels`, dan `scope` (PRIVATE/SHARED). |
 | `RequestLog` | Riwayat eksekusi; sumber statistik dan kuota harian. |
 | `CustomProvider` | Penyedia tambahan yang didaftarkan admin. |
+| `Payment` | Tagihan peningkatan paket; jejak nominal, jalur, kelunasan, dan siapa yang menyetujui. |
 | `Setting` | Pengaturan yang bisa diubah admin tanpa deploy. |
 
 ---
@@ -183,11 +185,49 @@ Menambah penyedia berformat OpenAI cukup satu entri di `providers.ts` — atau l
 - **Penjaga SSRF**: Base URL penyedia diresolusi DNS-nya dan ditolak kalau mengarah ke loopback, jaringan privat, atau link-local (termasuk endpoint metadata cloud)
 - **Pembatas percobaan masuk**: 8 kegagalan per email dan 24 per IP dalam 15 menit
 - Header keamanan: `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, plus HSTS dan CSP di produksi
+- **Pembayaran**: harga tidak pernah dibaca dari formulir — hanya paket dan siklusnya, nominalnya dihitung ulang di server. Webhook Midtrans diverifikasi dengan tanda tangan SHA-512 dan nominalnya dicocokkan dengan tagihan; pengaktifan paket bersifat idempoten, sehingga notifikasi yang dikirim ulang tidak menggandakan masa berlaku
 
 **Batasan yang perlu diketahui:**
 
 - Burst limiter berjalan di memori proses, jadi hanya berlaku **per instance**. Untuk penegakan ketat di deployment multi-replica, ganti bagian itu di `src/lib/rate-limit.ts` dengan Redis. Kuota harian tetap akurat karena berbasis database.
 - Penjaga SSRF mengurangi risiko, bukan menghapusnya (masih ada celah teoretis DNS rebinding). Untuk penjagaan penuh, batasi tujuan di tingkat jaringan lewat proxy egress.
+
+---
+
+## Pembayaran
+
+Dua jalur, dan admin yang menentukan mana yang terbuka lewat **Dashboard → Admin → Pembayaran**:
+
+| Mode | Artinya |
+|---|---|
+| `OFF` | Tidak ada yang bisa naik paket sendiri |
+| `MANUAL` | Transfer bank; pembeli menuliskan keterangan, admin yang mengonfirmasi |
+| `MIDTRANS` | Otomatis lewat Midtrans Snap |
+| `BOTH` | Pembeli yang memilih |
+
+### Menyiapkan Midtrans
+
+1. Ambil **Server Key** dan **Client Key** di dashboard Midtrans → *Settings → Access Keys*.
+2. Isi `MIDTRANS_SERVER_KEY` dan `MIDTRANS_CLIENT_KEY` di `.env` — atau isikan lewat Dashboard → Admin bila tidak ingin deploy ulang. Environment variable selalu menang.
+3. Isi `APP_URL` dengan alamat publik instance ini.
+4. Salin URL notifikasi yang ditampilkan di panel admin ke Midtrans → *Settings → Configuration → **Payment Notification URL***.
+
+Langkah 4 tidak boleh dilewat. Tanpa itu paket tidak akan pernah aktif otomatis, karena yang menyatakan lunas hanya webhook — halaman balik dari Midtrans sengaja tidak dipercaya (bisa ditutup pembeli, dibuka dua kali, atau dikarang sendiri URL-nya).
+
+Selama `MIDTRANS_IS_PRODUCTION` belum `"true"`, semua transaksi memakai endpoint sandbox dan tidak menarik uang sungguhan. UI menandainya dengan jelas agar tidak tertukar.
+
+### Alur
+
+```
+Pembeli pilih paket → Server hitung harga → Payment (PENDING) dibuat
+   → Snap dipanggil → pembeli diarahkan ke halaman Midtrans
+   → Midtrans POST ke /api/payments/midtrans/notification
+   → tanda tangan & nominal diverifikasi → Payment PAID → paket aktif
+```
+
+Jalur manual berhenti di `AWAITING_REVIEW` dan menunggu admin menekan **Setujui** — pengaktifannya memakai fungsi yang sama dengan jalur Midtrans, jadi keduanya tidak bisa berbeda perilaku.
+
+Masa berlaku yang tersisa **ditambahkan**, bukan dibuang: memperpanjang lebih awal tidak menghanguskan waktu yang sudah dibayar.
 
 ---
 

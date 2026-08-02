@@ -2,8 +2,16 @@
 
 /*
  * Token desain gaya shadcn untuk Tailwind v4.
- * Aplikasi memakai tema gelap permanen (kelas `dark` dipasang di <html>),
- * sesuai tampilan SaaS yang dituju.
+ *
+ * Terang dan gelap ditulis dalam SATU deklarasi lewat `light-dark()`, bukan dua
+ * blok terpisah. Sisi mana yang dipakai ditentukan `color-scheme`, dan itulah
+ * yang membuat tema bisa sepenuhnya diputuskan di server: `<html>` cukup diberi
+ * kelas `light` atau `dark` dari cookie. Tanpa kelas apa pun, `color-scheme:
+ * light dark` membuat preferensi sistem operasi yang menentukan — tanpa
+ * JavaScript, tanpa skrip inline, dan tanpa kilatan tema saat halaman dimuat.
+ *
+ * Efek sampingnya menguntungkan: `color-scheme` juga yang membuat widget bawaan
+ * sistem — daftar <option>, scrollbar, pemilih tanggal — ikut gelap sendiri.
  */
 
 @theme inline {
@@ -39,71 +47,50 @@
 }
 
 :root {
+  /* Dua nilai berarti "ikut sistem" — dasar bagi mode `system`. */
+  color-scheme: light dark;
+
   --radius: 0.75rem;
 
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.72 0.16 155);
-  --primary-foreground: oklch(0.15 0.03 155);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --success: oklch(0.72 0.16 155);
-  --warning: oklch(0.79 0.16 78);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.72 0.16 155);
+  /*                        terang                 gelap                  */
+  --background: light-dark(oklch(1 0 0), oklch(0.16 0.012 260));
+  --foreground: light-dark(oklch(0.145 0 0), oklch(0.97 0.005 260));
+  --card: light-dark(oklch(1 0 0), oklch(0.2 0.014 260));
+  --card-foreground: light-dark(oklch(0.145 0 0), oklch(0.97 0.005 260));
+  --popover: light-dark(oklch(1 0 0), oklch(0.2 0.014 260));
+  --popover-foreground: light-dark(oklch(0.145 0 0), oklch(0.97 0.005 260));
+  --primary: light-dark(oklch(0.72 0.16 155), oklch(0.76 0.17 155));
+  --primary-foreground: light-dark(oklch(0.15 0.03 155), oklch(0.16 0.03 155));
+  --secondary: light-dark(oklch(0.97 0 0), oklch(0.27 0.016 260));
+  --secondary-foreground: light-dark(oklch(0.205 0 0), oklch(0.97 0.005 260));
+  --muted: light-dark(oklch(0.97 0 0), oklch(0.27 0.016 260));
+  --muted-foreground: light-dark(oklch(0.556 0 0), oklch(0.7 0.015 260));
+  --accent: light-dark(oklch(0.97 0 0), oklch(0.3 0.018 260));
+  --accent-foreground: light-dark(oklch(0.205 0 0), oklch(0.97 0.005 260));
+  --destructive: light-dark(oklch(0.577 0.245 27.325), oklch(0.65 0.2 25));
+  --destructive-foreground: light-dark(oklch(0.985 0 0), oklch(0.98 0 0));
+  --success: light-dark(oklch(0.72 0.16 155), oklch(0.76 0.17 155));
+  --warning: light-dark(oklch(0.79 0.16 78), oklch(0.82 0.16 78));
+  --border: light-dark(oklch(0.922 0 0), oklch(1 0 0 / 12%));
+  --input: light-dark(oklch(0.922 0 0), oklch(1 0 0 / 16%));
+  --ring: light-dark(oklch(0.72 0.16 155), oklch(0.76 0.17 155));
 }
 
-.dark {
-  --background: oklch(0.16 0.012 260);
-  --foreground: oklch(0.97 0.005 260);
-  --card: oklch(0.2 0.014 260);
-  --card-foreground: oklch(0.97 0.005 260);
-  --popover: oklch(0.2 0.014 260);
-  --popover-foreground: oklch(0.97 0.005 260);
-  --primary: oklch(0.76 0.17 155);
-  --primary-foreground: oklch(0.16 0.03 155);
-  --secondary: oklch(0.27 0.016 260);
-  --secondary-foreground: oklch(0.97 0.005 260);
-  --muted: oklch(0.27 0.016 260);
-  --muted-foreground: oklch(0.7 0.015 260);
-  --accent: oklch(0.3 0.018 260);
-  --accent-foreground: oklch(0.97 0.005 260);
-  --destructive: oklch(0.65 0.2 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  --success: oklch(0.76 0.17 155);
-  --warning: oklch(0.82 0.16 78);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 16%);
-  --ring: oklch(0.76 0.17 155);
+/*
+ * Pilihan eksplisit pengguna. Kelasnya dipasang server dari cookie, jadi sudah
+ * benar sejak byte pertama HTML — tidak ada momen tema salah yang terlihat.
+ */
+:root.light {
+  color-scheme: light;
+}
+
+:root.dark {
+  color-scheme: dark;
 }
 
 @layer base {
   * {
     border-color: var(--border);
-  }
-
-  /*
-   * Widget yang digambar sistem operasi — daftar <option>, scrollbar,
-   * pemilih tanggal — tidak mengikuti CSS halaman. Tanpa petunjuk ini
-   * semuanya muncul dengan tema terang bawaan OS dan terlihat asing.
-   */
-  :root {
-    color-scheme: light;
-  }
-
-  .dark {
-    color-scheme: dark;
   }
 
   body {

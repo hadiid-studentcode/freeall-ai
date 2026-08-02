@@ -29,6 +29,28 @@ enum Plan {
   TEAM
 }
 
+/// Bagaimana sebuah tagihan dibayar.
+enum PaymentMethod {
+  /// Lewat Midtrans Snap — status ditentukan webhook, bukan halaman balik.
+  MIDTRANS
+  /// Transfer manual; pengguna mengunggah keterangan, admin yang mengonfirmasi.
+  MANUAL
+}
+
+/// Perjalanan satu tagihan.
+///
+/// `AWAITING_REVIEW` hanya dipakai jalur manual: pengguna sudah mengaku
+/// membayar, tetapi uangnya belum diverifikasi siapa pun. Dibedakan dari
+/// `PENDING` supaya antrean kerja admin jelas isinya.
+enum PaymentStatus {
+  PENDING
+  AWAITING_REVIEW
+  PAID
+  FAILED
+  EXPIRED
+  CANCELLED
+}
+
 /// Siapa yang boleh memakai sebuah ProviderKey.
 ///
 /// Sengaja disimpan eksplisit, bukan diturunkan dari peran pemiliknya:
@@ -75,21 +97,22 @@ model Setting {
 
 /// Pengguna web / pelanggan SaaS.
 model User {
-  id           String        @id @default(uuid())
-  email        String        @unique
-  name         String?
-  passwordHash String
-  role         Role          @default(USER)
-  plan         Plan          @default(FREE)
+  id            String        @id @default(uuid())
+  email         String        @unique
+  name          String?
+  passwordHash  String
+  role          Role          @default(USER)
+  plan          Plan          @default(FREE)
   /// Kapan paket berbayar berakhir. Null berarti tanpa masa berlaku
   /// (paket gratis, atau langganan seumur hidup yang diberikan admin).
   /// Lewat tanggal ini, akun otomatis dianggap kembali ke FREE.
   planExpiresAt DateTime?
-  apiKeys      ApiKey[] // Kunci SaaS yang dibuat user untuk memakai gateway ini
-  providerKeys ProviderKey[] // Kunci AI (Groq/Gemini/dll) yang disumbangkan user
-  sessions     Session[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  apiKeys       ApiKey[] // Kunci SaaS yang dibuat user untuk memakai gateway ini
+  providerKeys  ProviderKey[] // Kunci AI (Groq/Gemini/dll) yang disumbangkan user
+  sessions      Session[]
+  payments      Payment[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 }
 
 /// Sesi login dashboard. Cookie hanya membawa token mentah; DB menyimpan hash-nya.
@@ -175,4 +198,55 @@ model RequestLog {
 
   @@index([apiKeyId, createdAt])
   @@index([createdAt])
+}
+
+/// Satu tagihan peningkatan paket.
+///
+/// Disimpan sebagai catatan tersendiri, bukan sekadar mengubah `User.plan`,
+/// karena uang butuh jejak: berapa yang ditagih, lewat jalur apa, kapan lunas,
+/// dan siapa yang menyetujuinya. Tanpa ini, sengketa pembayaran tidak bisa
+/// ditelusuri dan pembukuan tidak punya sumber.
+model Payment {
+  id      String @id @default(uuid())
+  /// Nomor pesanan yang dikirim ke Midtrans. Wajib unik seumur akun merchant,
+  /// jadi dibuat dengan komponen acak — bukan nomor urut yang bisa ditebak.
+  orderId String @unique
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Paket yang dibeli dan berapa lama masa berlakunya.
+  plan         Plan
+  durationDays Int
+  /// Jumlah dalam rupiah penuh (bukan sen) — Midtrans memakai satuan ini.
+  amount       Int
+
+  method PaymentMethod
+  status PaymentStatus @default(PENDING)
+
+  /// Kanal yang benar-benar dipakai pembeli di Midtrans (mis. "gopay", "bca_va").
+  channel         String?
+  snapToken       String?
+  snapRedirectUrl String?
+
+  /// Keterangan dari pembeli pada jalur manual (nama pengirim, nomor referensi).
+  payerNote  String?
+  /// Alasan admin menolak, atau catatan saat menyetujui.
+  adminNote  String?
+  /// Admin yang memutuskan pada jalur manual. Sengaja bukan relasi: kalau
+  /// akun admin dihapus, jejak siapa yang menyetujui tidak boleh ikut hilang.
+  reviewedBy String?
+  reviewedAt DateTime?
+
+  paidAt    DateTime?
+  /// Batas waktu tagihan. Lewat ini, tagihan tidak bisa dibayar lagi.
+  expiresAt DateTime?
+
+  /// Payload webhook terakhir, apa adanya. Dipakai saat menelusuri sengketa.
+  lastNotification Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
 }

@@ -1,75 +1,50 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Monitor, Moon, Sun } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useUiCopy } from "@/lib/i18n/client";
-
-type Theme = "light" | "dark" | "system";
-
-const STORAGE_KEY = "freeall-theme";
-const CHANGE_EVENT = "freeall-theme-change";
+import { setThemeAction } from "@/lib/theme/actions";
+import { useTheme } from "@/lib/theme/client";
+import type { Theme } from "@/lib/theme/shared";
 
 /**
- * Tema dibaca lewat `useSyncExternalStore`, bukan state + efek.
+ * Pengalih tema: ikut sistem → terang → gelap → ikut sistem.
  *
- * Sumber kebenarannya ada di luar React (localStorage dan preferensi sistem),
- * dan hook ini memang dibuat untuk itu: React membaca ulang saat sumbernya
- * berubah, tanpa perlu menyalin nilainya ke state di dalam efek.
+ * Pilihan disimpan di cookie lalu halaman dimuat ulang dari server, sama
+ * seperti pengalih bahasa. Karena kelas temanya sudah ikut di HTML pertama,
+ * tidak ada lagi kebutuhan akan skrip inline yang berjalan sebelum React —
+ * pendekatan lama yang memicu peringatan React soal tag skrip di dalam
+ * komponen, sekaligus tidak benar-benar mencegah kilatan tema di App Router.
  */
-function subscribe(onChange: () => void): () => void {
-  const media = window.matchMedia("(prefers-color-scheme: dark)");
-
-  // `storage` menangani perubahan dari tab lain; event khusus menangani
-  // perubahan di tab ini sendiri, karena `storage` tidak menyala di tab
-  // yang melakukan penulisan.
-  window.addEventListener("storage", onChange);
-  window.addEventListener(CHANGE_EVENT, onChange);
-  media.addEventListener("change", onChange);
-
-  return () => {
-    window.removeEventListener("storage", onChange);
-    window.removeEventListener(CHANGE_EVENT, onChange);
-    media.removeEventListener("change", onChange);
-  };
-}
-
-function getSnapshot(): Theme {
-  return (localStorage.getItem(STORAGE_KEY) as Theme | null) ?? "system";
-}
-
-/** Di server tema belum diketahui; skrip di <head> yang menerapkannya. */
-function getServerSnapshot(): Theme | null {
-  return null;
-}
-
-function apply(theme: Theme): void {
-  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const dark = theme === "dark" || (theme === "system" && prefersDark);
-  document.documentElement.classList.toggle("dark", dark);
-}
+const NEXT_THEME: Record<Theme, Theme> = {
+  system: "light",
+  light: "dark",
+  dark: "system",
+};
 
 export function ThemeToggle() {
   const ui = useUiCopy();
-  const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const theme = useTheme();
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
 
   function cycle() {
-    const next: Theme =
-      theme === "system" ? "light" : theme === "light" ? "dark" : "system";
-    localStorage.setItem(STORAGE_KEY, next);
-    apply(next);
-    window.dispatchEvent(new Event(CHANGE_EVENT));
+    if (pending) return;
+    startTransition(async () => {
+      await setThemeAction(NEXT_THEME[theme]);
+      router.refresh();
+    });
   }
 
   const label =
-    theme === null
-      ? ui.themeToggle
-      : theme === "system"
-        ? ui.themeSystem
-        : theme === "light"
-          ? ui.themeLight
-          : ui.themeDark;
+    theme === "system"
+      ? ui.themeSystem
+      : theme === "light"
+        ? ui.themeLight
+        : ui.themeDark;
 
   return (
     <Button
@@ -79,18 +54,9 @@ export function ThemeToggle() {
       onClick={cycle}
       title={label}
       aria-label={label}
+      className={pending ? "opacity-60" : undefined}
     >
-      {/* Sebelum hydration tema belum diketahui, jadi ikonnya disamarkan
-          agar tidak sempat menampilkan pilihan yang salah. */}
-      {theme === null ? (
-        <Monitor className="opacity-0" />
-      ) : theme === "system" ? (
-        <Monitor />
-      ) : theme === "light" ? (
-        <Sun />
-      ) : (
-        <Moon />
-      )}
+      {theme === "system" ? <Monitor /> : theme === "light" ? <Sun /> : <Moon />}
     </Button>
   );
 }

@@ -36,7 +36,7 @@ export const en: typeof id = {
       "How FreeAll AI works: request flow, layered fallback, key ownership, and the API reference.",
     metaDescription:
       "An API gateway with smart fallback. Bring your free API keys from Groq, Gemini, Claude and a dozen other providers together behind one endpoint.",
-    badge: "Free to use · Self-hostable",
+    badge: "Free to use · Bring your own keys",
     titleLead: "AI routing",
     titleAccent: "without limits",
     subtitle:
@@ -48,7 +48,7 @@ export const en: typeof id = {
       "No credit card",
       "Keys encrypted with AES-256",
       "Model and key fallback",
-      "Fully self-hostable",
+      "Ready to use in minutes",
     ],
     demoUnavailableTitle: "Demo is unavailable",
     demoUnavailableBody:
@@ -129,7 +129,7 @@ export const en: typeof id = {
     terms: "Terms of service",
     privacy: "Privacy policy",
     security_link: "Data security",
-    selfHost: "Fully self-hostable.",
+    onPremise: "On-premise available for enterprise.",
     disclaimer:
       "Your prompts are forwarded to third-party AI providers and are subject to their own policies. Do not send confidential data.",
   },
@@ -171,6 +171,22 @@ export const en: typeof id = {
       invalidCredentials: "Wrong email or password.",
     },
 
+    billing: {
+      invalidSelection: "That plan or billing cycle is not recognized.",
+      midtransUnavailable:
+        "Automatic payment is unavailable right now. Contact this instance's admin.",
+      manualUnavailable: "The manual transfer route is currently closed by the admin.",
+      midtransFailed: (detail: string) =>
+        `Could not create the Midtrans transaction: ${detail}`,
+      orderAlreadyOpen: (orderId: string) =>
+        `You still have an unfinished invoice (${orderId}). Complete or cancel it before creating a new one.`,
+      manualCreated:
+        "Invoice created. Transfer according to the instructions, then press \u201cI have transferred\u201d.",
+      proofTooShort:
+        "Write your transfer details — for example the sender name and reference number.",
+      proofSubmitted: "Thank you. Your invoice is queued for admin review.",
+      orderNotFound: "Invoice not found, or it can no longer be changed.",
+    },
     apiKey: {
       invalidQuota: "Daily quota must be a whole number between 1 and 100,000.",
       planLimit: (plan: string, max: string) =>
@@ -325,8 +341,8 @@ export const en: typeof id = {
         a: "No. The daily quota only applies when you use Public Providers — our keys. Once you add your own key, the quota is entirely yours and we do not cap it.",
       },
       {
-        q: "How is this different from self-hosting?",
-        a: "Nothing is locked away. You can install this on your own server and every feature works. What we sell is the managed service: quota from our keys, longer history, and not having to run servers or collect provider keys yourself.",
+        q: "Can we install it on our own servers?",
+        a: "Yes, under an enterprise on-premise licence — get in touch to discuss it. Otherwise FreeAll AI is a managed service: quota from our keys, longer history, and no servers to run or provider keys to collect yourself.",
       },
       {
         q: "Can I cancel any time?",
@@ -527,9 +543,9 @@ export const en: typeof id = {
         ],
       },
       {
-        title: "7. Self-hosted",
+        title: "7. On-premise installation",
         body: [
-          "These terms apply to the instance we operate. If you install FreeAll AI on your own server, you are fully responsible for its operation, security and compliance.",
+          "These terms apply to the instance we operate. Installing on your own infrastructure is available only under a written on-premise licence; its terms are set out in a separate agreement, and responsibility for operation, security and compliance rests with you.",
         ],
       },
       {
@@ -577,9 +593,9 @@ export const en: typeof id = {
     deleteTitle: "Deleting data",
     deleteBody:
       "You can delete provider keys and API keys at any time from the dashboard; deletion takes effect immediately. To delete your entire account and its data, contact the admin of this instance.",
-    selfHostTitle: "Self-hosted",
-    selfHostBody:
-      "If you install FreeAll AI on your own server, all data lives on your infrastructure and this policy does not apply — you are the data controller. Keep ENCRYPTION_KEY safe: without it, stored keys can no longer be decrypted.",
+    onPremiseTitle: "On-premise installation",
+    onPremiseBody:
+      "For customers with an on-premise licence, all data lives on your own infrastructure and this policy does not apply — you are the data controller. Keep ENCRYPTION_KEY safe: without it, stored keys can no longer be decrypted.",
   },
 
   dash: {
@@ -690,6 +706,49 @@ export const en: typeof id = {
     },
 
     admin: {
+      paymentTitle: "Payments",
+      paymentDesc:
+        "Decide which routes users may take to upgrade. The Midtrans route only truly opens once its credentials are in place.",
+      modeLabel: "Payment route",
+      modeOFF: "Close everything — nobody can self-upgrade",
+      modeMANUAL: "Manual transfer only — the admin confirms",
+      modeMIDTRANS: "Midtrans only — automatic",
+      modeBOTH: "Both — the buyer chooses",
+      modeNotReady:
+        "This mode needs Midtrans credentials, which are not configured. Until they are, the Midtrans route stays closed to users.",
+      instructionsLabel: "Manual transfer instructions",
+      instructionsPlaceholder:
+        "Example:\nBCA 1234567890 under Your Name\nInclude the order number in the transfer memo.",
+      instructionsHint: "Shown to buyers when they pick manual transfer.",
+      midtransTitle: "Midtrans credentials",
+      midtransFromEnv:
+        "Read from environment variables. Values entered here are ignored while env is set — change them in your deploy configuration.",
+      midtransFromDb: "Configured from this dashboard, stored encrypted.",
+      midtransMissing: "Not configured.",
+      serverKey: "Server key",
+      clientKey: "Client key",
+      production: "Production mode (not sandbox)",
+      saveCredentials: "Save credentials",
+      clearCredentials: "Delete credentials",
+      webhookTitle: "Notification URL",
+      webhookHint:
+        "Register this address in the Midtrans dashboard → Settings → Configuration → Payment Notification URL. Without it, plans will never activate automatically.",
+      sandboxBadge: "Sandbox",
+      productionBadge: "Production",
+
+      queueTitle: "Manual transfer review",
+      queueDesc:
+        "Invoices whose buyers claim to have transferred. Approve only after you can see the money in your account.",
+      queueEmpty: "Nothing waiting for review.",
+      queueColUser: "Buyer",
+      queueColOrder: "Order",
+      queueColPlan: "Plan",
+      queueColAmount: "Amount",
+      queueColNote: "Buyer's note",
+      queueColCreated: "Created",
+      approve: "Approve",
+      reject: "Reject",
+      adminNotePlaceholder: "Note (optional)",
       title: "Admin",
       subtitle:
         "Manage Public Providers and users. Keys in the Public Providers pool serve every registered account and also power the front-page demo that visitors can try without signing up.",
@@ -760,6 +819,60 @@ export const en: typeof id = {
       makeUser: "Make user",
       makeAdmin: "Make admin",
       removeUser: "Delete this user and all their keys",
+    },
+
+    billing: {
+      title: "Upgrade your plan",
+      subtitle:
+        "Pick a plan and a billing cycle. Remaining time is not forfeited — it is added to the new period.",
+      closed:
+        "This instance's admin has not opened a payment route yet. Contact the admin to upgrade.",
+      cycleMonthly: "Monthly",
+      cycleYearly: "Yearly",
+      yearlyBadge: "Save 2 months",
+      perMonth: "/ month",
+      perYear: "/ year",
+      savings: (amount: string) => `Save ${amount} versus paying monthly`,
+      payMidtrans: "Pay with Midtrans",
+      payManual: "Manual transfer",
+      processing: "Processing…",
+      sandboxNotice:
+        "Midtrans is still in sandbox mode — payments do not move real money.",
+
+      openTitle: "Open invoice",
+      orderId: "Order number",
+      amount: "Amount",
+      created: "Created",
+      due: "Due",
+      continuePayment: "Continue payment",
+      cancelOrder: "Cancel",
+      manualHowTo: "How to pay",
+      noInstructions:
+        "The admin has not written transfer instructions yet. Contact them for account details.",
+      proofLabel: "Transfer details",
+      proofPlaceholder: "e.g. BCA transfer from Budi, ref 1234567",
+      proofSubmit: "I have transferred",
+      awaitingReview:
+        "Waiting for admin review. Your plan activates once the transfer is matched.",
+
+      historyTitle: "Payment history",
+      historyEmpty: "No transactions yet.",
+      colDate: "Date",
+      colPlan: "Plan",
+      colAmount: "Amount",
+      colMethod: "Method",
+      colStatus: "Status",
+      methodMidtrans: "Midtrans",
+      methodManual: "Manual transfer",
+      statusPENDING: "Awaiting payment",
+      statusAWAITING_REVIEW: "Awaiting review",
+      statusPAID: "Paid",
+      statusFAILED: "Failed",
+      statusEXPIRED: "Expired",
+      statusCANCELLED: "Cancelled",
+      returnedPaid: "Payment received — your plan is active.",
+      returnedPending:
+        "Payment is not confirmed yet. If you have paid, the status will update on its own within a few minutes.",
     },
 
     logs: {
